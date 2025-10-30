@@ -1,23 +1,19 @@
 import SportsDashboard from '@/components/SportsDashboard';
+import { auth } from '@/auth';
+import { redirect } from 'next/navigation';
 
 async function getStats() {
   try {
-    // Use absolute URL for server-side fetch
     const res = await fetch('http://localhost:3000/api/stats', {
       cache: 'no-store',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: { 'Content-Type': 'application/json' },
     });
     
     if (!res.ok) {
-      console.error('API fetch failed:', res.status, res.statusText);
       throw new Error('Failed to fetch stats');
     }
     
-    const data = await res.json();
-    console.log('Fetched data in page:', data);
-    return data;
+    return res.json();
   } catch (error) {
     console.error('Error in getStats:', error);
     throw error;
@@ -25,11 +21,16 @@ async function getStats() {
 }
 
 export default async function DashboardPage() {
+  const session = await auth();
+
+  if (!session?.user) {
+    redirect('/');
+  }
+
   const data = await getStats();
   
-  return <SportsDashboard data={data} />;
+  return <SportsDashboard data={data} user={session.user} />;
 }
 
-// Force dynamic rendering
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
