@@ -20,35 +20,15 @@ export default function SportsDashboard({ data }: { data: any }) {
     });
   };
 
-  // 🟢 Include ALL equipment
-  const peakTimesData: Record<string, any[]> = {};
-  const allEquipment = [
-    'aggregate',
-    'badminton racket',
-    'squash',
-    'tennis',
-    'TT',
-    'chess',
-    'carrom coin',
-    'basketball',
-    'football',
-    'volleyball',
-    'yoga mat',
-    'pickleball racket + ball',
-    'cycle',
-    'cricket bat + ball',
-    'weight machine',
-    'boxing gloves',
-    'washroom locker key',
-    'frisbee',
-    'foosball',
-    'daateball',
-    'pool sticks',
-  ];
-
-  allEquipment.forEach((eq) => {
-    peakTimesData[eq] = formatHourData(data.peakBorrowingTimes?.[eq] || []);
-  });
+  const peakTimesData: Record<string, any[]> = {
+    aggregate: formatHourData(data.peakBorrowingTimes?.aggregate || []),
+    basketball: formatHourData(data.peakBorrowingTimes?.basketball || []),
+    football: formatHourData(data.peakBorrowingTimes?.football || []),
+    tennis: formatHourData(data.peakBorrowingTimes?.tennis || []),
+    'badminton racket': formatHourData(data.peakBorrowingTimes?.['badminton racket'] || []),
+    volleyball: formatHourData(data.peakBorrowingTimes?.volleyball || []),
+    TT: formatHourData(data.peakBorrowingTimes?.TT || []),
+  };
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">
@@ -60,7 +40,6 @@ export default function SportsDashboard({ data }: { data: any }) {
           </div>
         </div>
 
-        {/* Summary Cards */}
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -104,7 +83,6 @@ export default function SportsDashboard({ data }: { data: any }) {
           </Card>
         </div>
 
-        {/* Peak Borrowing Times */}
         <Card>
           <CardHeader>
             <CardTitle>Peak Borrowing Times</CardTitle>
@@ -113,13 +91,15 @@ export default function SportsDashboard({ data }: { data: any }) {
           <CardContent>
             <Tabs defaultValue="aggregate" onValueChange={setPeakTimeView}>
               <TabsList className="mb-4 flex-wrap h-auto">
-                {allEquipment.map((eq) => (
-                  <TabsTrigger key={eq} value={eq} className="capitalize">
-                    {eq === 'aggregate' ? 'All Equipment' : eq}
-                  </TabsTrigger>
-                ))}
+                <TabsTrigger value="aggregate">All Equipment</TabsTrigger>
+                <TabsTrigger value="basketball">Basketball</TabsTrigger>
+                <TabsTrigger value="football">Football</TabsTrigger>
+                <TabsTrigger value="tennis">Tennis</TabsTrigger>
+                <TabsTrigger value="badminton racket">Badminton</TabsTrigger>
+                <TabsTrigger value="volleyball">Volleyball</TabsTrigger>
+                <TabsTrigger value="TT">Table Tennis</TabsTrigger>
               </TabsList>
-
+              
               {peakTimesData[peakTimeView]?.length > 0 ? (
                 <ResponsiveContainer width="100%" height={300}>
                   <LineChart data={peakTimesData[peakTimeView]}>
@@ -128,13 +108,7 @@ export default function SportsDashboard({ data }: { data: any }) {
                     <YAxis />
                     <Tooltip />
                     <Legend />
-                    <Line
-                      type="monotone"
-                      dataKey="count"
-                      stroke="#2563eb"
-                      strokeWidth={2}
-                      name="Borrowings"
-                    />
+                    <Line type="monotone" dataKey="count" stroke="#2563eb" strokeWidth={2} name="Borrowings" />
                   </LineChart>
                 </ResponsiveContainer>
               ) : (
@@ -146,7 +120,6 @@ export default function SportsDashboard({ data }: { data: any }) {
           </CardContent>
         </Card>
 
-        {/* Most/Least Borrowed */}
         <div className="grid gap-4 md:grid-cols-2">
           <Card>
             <CardHeader>
@@ -217,7 +190,6 @@ export default function SportsDashboard({ data }: { data: any }) {
           </Card>
         </div>
 
-        {/* Run-Out Frequency */}
         <Card>
           <CardHeader>
             <CardTitle>Most Frequently Run Out Equipment</CardTitle>
