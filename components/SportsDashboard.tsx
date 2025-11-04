@@ -175,7 +175,7 @@ export default function SportsDashboard({ data, userEmail }: { data: any; userEm
                           <span className="text-sm font-medium text-gray-900 dark:text-gray-100">{item.equipment}</span>
                           <span className="text-sm text-gray-500 dark:text-gray-400">{item.borrowCount} borrows</span>
                         </div>
-                        <div className="w-full bg-gray-300 dark:bg-black rounded-full h-2 overflow-hidden">
+                        <div className="w-full bg-gray-200 dark:bg-black rounded-full h-2 overflow-hidden">
                           <div
                             className="bg-blue-600 dark:bg-blue-500 h-2 rounded-full"
                             style={{ width: `${Math.min(Number(item.percentage) || 0, 100)}%` }}
@@ -209,7 +209,7 @@ export default function SportsDashboard({ data, userEmail }: { data: any; userEm
                           <span className="text-sm font-medium text-gray-900 dark:text-gray-100">{item.equipment}</span>
                           <span className="text-sm text-gray-500 dark:text-gray-400">{item.borrowCount} borrows</span>
                         </div>
-                        <div className="w-full bg-gray-300 dark:bg-black rounded-full h-2 overflow-hidden">
+                        <div className="w-full bg-gray-200 dark:bg-black rounded-full h-2 overflow-hidden">
                           <div
                             className="bg-orange-500 dark:bg-orange-400 h-2 rounded-full"
                             style={{ width: `${Math.min((Number(item.percentage) || 0) * 3, 100)}%` }}

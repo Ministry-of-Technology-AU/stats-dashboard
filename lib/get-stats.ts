@@ -131,7 +131,11 @@ export async function getStats() {
         5;
 
       if (!runOutFrequency[equipment]) {
-        runOutFrequency[equipment] = { equipment, runOutCount: 0 };
+        runOutFrequency[equipment] = { 
+          equipment, 
+          runOutCount: 0,
+          capacity: inventoryLevel 
+        };
       }
 
       if (row.dailyBorrows >= inventoryLevel * 0.8) {
@@ -139,11 +143,31 @@ export async function getStats() {
       }
     });
 
+    // Get current borrowing status for utilization rate
+    const [currentBorrowings]: any = await connection.query(`
+      SELECT 
+        equipment,
+        COUNT(*) as currentlyBorrowed
+      FROM sports 
+      WHERE status = 'PENDING'
+      GROUP BY equipment
+    `);
+
     const runOutFrequencyArray = Object.values(runOutFrequency)
-      .map((item: any) => ({
-        ...item,
-        percentage: (item.runOutCount / 90) * 100,
-      }))
+      .map((item: any) => {
+        const borrowed = currentBorrowings.find((b: any) => 
+          b.equipment.toLowerCase() === item.equipment.toLowerCase()
+        );
+        const currentlyBorrowed = borrowed ? Number(borrowed.currentlyBorrowed) : 0;
+        const utilizationRate = (currentlyBorrowed / item.capacity) * 100;
+        
+        return {
+          ...item,
+          percentage: (item.runOutCount / 90) * 100,
+          currentlyBorrowed,
+          utilizationRate,
+        };
+      })
       .sort((a: any, b: any) => b.runOutCount - a.runOutCount)
       .slice(0, 5);
 
