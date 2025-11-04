@@ -6,6 +6,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Clock, TrendingUp, AlertTriangle } from 'lucide-react';
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { SignOutButton } from '@/components/SignOutButton';
+import { ThemeToggle } from '@/components/ThemeToggle';
 
 export default function SportsDashboard({ data, userEmail }: { data: any; userEmail?: string | null }) {
   const [peakTimeView, setPeakTimeView] = useState('aggregate');
@@ -52,17 +53,20 @@ export default function SportsDashboard({ data, userEmail }: { data: any; userEm
   });
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-6">
       <div className="max-w-7xl mx-auto space-y-6">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">Sports Inventory Dashboard</h1>
-            <p className="text-gray-500 mt-1">Monitor equipment usage and borrowing patterns</p>
+            <h1 className="text-3xl font-bold tracking-tight text-gray-900 dark:text-white">Sports Inventory Dashboard</h1>
+            <p className="text-gray-500 dark:text-gray-400 mt-1">Monitor equipment usage and borrowing patterns</p>
             {userEmail && (
-              <p className="text-xs text-gray-400 mt-1">Signed in as {userEmail}</p>
+              <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">Signed in as {userEmail}</p>
             )}
           </div>
-          <SignOutButton />
+          <div className="flex items-center gap-3">
+            <ThemeToggle />
+            <SignOutButton />
+          </div>
         </div>
 
         {/* Summary Cards */}
