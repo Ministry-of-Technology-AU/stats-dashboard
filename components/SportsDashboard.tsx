@@ -5,8 +5,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Clock, TrendingUp, AlertTriangle } from 'lucide-react';
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { SignOutButton } from '@/components/SignOutButton';
 
-export default function SportsDashboard({ data }: { data: any }) {
+export default function SportsDashboard({ data, userEmail }: { data: any; userEmail?: string | null }) {
   const [peakTimeView, setPeakTimeView] = useState('aggregate');
 
   const formatHourData = (hourlyData: any[]) => {
@@ -57,7 +58,11 @@ export default function SportsDashboard({ data }: { data: any }) {
           <div>
             <h1 className="text-3xl font-bold tracking-tight">Sports Inventory Dashboard</h1>
             <p className="text-gray-500 mt-1">Monitor equipment usage and borrowing patterns</p>
+            {userEmail && (
+              <p className="text-xs text-gray-400 mt-1">Signed in as {userEmail}</p>
+            )}
           </div>
+          <SignOutButton />
         </div>
 
         {/* Summary Cards */}

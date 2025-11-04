@@ -1,29 +1,11 @@
 import SportsDashboard from '@/components/SportsDashboard';
-
-async function getStats() {
-  try {
-    // Use absolute URL for server-side fetch
-    const res = await fetch('http://localhost:3000/api/stats', {
-      cache: 'no-store',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    });
-
-    if (!res.ok) {
-      throw new Error('Failed to fetch stats');
-    }
-
-    const data = await res.json();
-    return data;
-  } catch {
-    throw new Error('Error fetching stats');
-  }
-}
+import { auth } from '@/auth';
+import { getStats } from '@/lib/get-stats';
 
 export default async function DashboardPage() {
+  const session = await auth();
   const data = await getStats();
-  return <SportsDashboard data={data} />;
+  return <SportsDashboard data={data} userEmail={session?.user?.email} />;
 }
 
 // Force dynamic rendering
