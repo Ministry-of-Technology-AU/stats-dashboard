@@ -167,17 +167,17 @@ export default function SportsDashboard({ data, userEmail }: { data: any; userEm
                 <div className="space-y-4">
                   {data.mostBorrowed.map((item: any, idx: number) => (
                     <div key={item.equipment} className="flex items-center">
-                      <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-sm font-semibold text-blue-700 mr-3">
+                      <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center text-sm font-semibold text-blue-700 dark:text-blue-300 mr-3">
                         {idx + 1}
                       </div>
                       <div className="flex-1">
                         <div className="flex items-center justify-between mb-1">
-                          <span className="text-sm font-medium">{item.equipment}</span>
-                          <span className="text-sm text-gray-500">{item.borrowCount} borrows</span>
+                          <span className="text-sm font-medium text-gray-900 dark:text-gray-100">{item.equipment}</span>
+                          <span className="text-sm text-gray-500 dark:text-gray-400">{item.borrowCount} borrows</span>
                         </div>
-                        <div className="w-full bg-gray-200 rounded-full h-2">
+                        <div className="w-full bg-gray-300 dark:bg-black rounded-full h-2 overflow-hidden">
                           <div
-                            className="bg-blue-600 h-2 rounded-full"
+                            className="bg-blue-600 dark:bg-blue-500 h-2 rounded-full"
                             style={{ width: `${Math.min(Number(item.percentage) || 0, 100)}%` }}
                           />
                         </div>
@@ -186,7 +186,7 @@ export default function SportsDashboard({ data, userEmail }: { data: any; userEm
                   ))}
                 </div>
               ) : (
-                <div className="text-center py-8 text-gray-500">No data</div>
+                <div className="text-center py-8 text-gray-500 dark:text-gray-400">No data</div>
               )}
             </CardContent>
           </Card>
@@ -201,17 +201,17 @@ export default function SportsDashboard({ data, userEmail }: { data: any; userEm
                 <div className="space-y-4">
                   {data.leastBorrowed.map((item: any, idx: number) => (
                     <div key={item.equipment} className="flex items-center">
-                      <div className="w-8 h-8 rounded-full bg-orange-100 flex items-center justify-center text-sm font-semibold text-orange-700 mr-3">
+                      <div className="w-8 h-8 rounded-full bg-orange-100 dark:bg-orange-900 flex items-center justify-center text-sm font-semibold text-orange-700 dark:text-orange-300 mr-3">
                         {idx + 1}
                       </div>
                       <div className="flex-1">
                         <div className="flex items-center justify-between mb-1">
-                          <span className="text-sm font-medium">{item.equipment}</span>
-                          <span className="text-sm text-gray-500">{item.borrowCount} borrows</span>
+                          <span className="text-sm font-medium text-gray-900 dark:text-gray-100">{item.equipment}</span>
+                          <span className="text-sm text-gray-500 dark:text-gray-400">{item.borrowCount} borrows</span>
                         </div>
-                        <div className="w-full bg-gray-200 rounded-full h-2">
+                        <div className="w-full bg-gray-300 dark:bg-black rounded-full h-2 overflow-hidden">
                           <div
-                            className="bg-orange-500 h-2 rounded-full"
+                            className="bg-orange-500 dark:bg-orange-400 h-2 rounded-full"
                             style={{ width: `${Math.min((Number(item.percentage) || 0) * 3, 100)}%` }}
                           />
                         </div>
@@ -220,7 +220,7 @@ export default function SportsDashboard({ data, userEmail }: { data: any; userEm
                   ))}
                 </div>
               ) : (
-                <div className="text-center py-8 text-gray-500">No data</div>
+                <div className="text-center py-8 text-gray-500 dark:text-gray-400">No data</div>
               )}
             </CardContent>
           </Card>
