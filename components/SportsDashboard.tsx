@@ -11,13 +11,49 @@ import { ThemeToggle } from '@/components/ThemeToggle';
 export default function SportsDashboard({ data, userEmail }: { data: any; userEmail?: string | null }) {
   const [peakTimeView, setPeakTimeView] = useState('aggregate');
 
-  const formatHourData = (hourlyData: any[]) => {
+  // Inventory levels for each equipment
+  const INVENTORY_LEVELS: Record<string, number> = {
+    'badminton racket': 13,
+    'squash': 8,
+    'tennis': 6,
+    'TT': 12,
+    'chess': 2,
+    'carrom coin': 1,
+    'basketball': 8,
+    'football': 8,
+    'volleyball': 4,
+    'yoga mat': 10,
+    'pickleball racket + ball': 8,
+    'cycle': 10,
+    'cricket bat + ball': 2,
+    'weight machine': 1,
+    'boxing gloves': 1,
+    'washroom locker key': 18,
+    'frisbee': 2,
+    'foosball': 2,
+    'daateball': 1,
+    'pool sticks': 5,
+  };
+
+  const getColorForUsage = (count: number, equipment: string) => {
+    const inventoryLevel = INVENTORY_LEVELS[equipment] || 10;
+    const usagePercent = (count / inventoryLevel) * 100;
+    
+    if (usagePercent <= 25) return '#22c55e'; // green - healthy (0-25% used = 75%+ available)
+    if (usagePercent <= 70) return '#eab308'; // yellow - moderate (25-70% used = 30-75% available)
+    return '#ef4444'; // red - critical (70%+ used = 30% or less available)
+  };
+
+  const formatHourData = (hourlyData: any[], equipment: string) => {
     if (!hourlyData || hourlyData.length === 0) return [];
     return hourlyData.map((d: any) => {
       const hour = Number(d.hour);
+      const count = Number(d.count) || 0;
       return {
         time: `${hour === 0 ? 12 : hour > 12 ? hour - 12 : hour}:00 ${hour >= 12 ? 'PM' : 'AM'}`,
-        count: Number(d.count) || 0
+        count,
+        color: getColorForUsage(count, equipment),
+        hour,
       };
     });
   };
@@ -49,8 +85,34 @@ export default function SportsDashboard({ data, userEmail }: { data: any; userEm
   ];
 
   allEquipment.forEach((eq) => {
-    peakTimesData[eq] = formatHourData(data.peakBorrowingTimes?.[eq] || []);
+    peakTimesData[eq] = formatHourData(data.peakBorrowingTimes?.[eq] || [], eq);
   });
+
+  // Custom tooltip to show inventory status
+  const CustomTooltip = ({ active, payload }: any) => {
+    if (active && payload && payload.length) {
+      const dataPoint = payload[0].payload;
+      const inventoryLevel = INVENTORY_LEVELS[peakTimeView] || 10;
+      const usagePercent = ((dataPoint.count / inventoryLevel) * 100).toFixed(0);
+      const availablePercent = (100 - Number(usagePercent)).toFixed(0);
+      
+      let status = 'Healthy';
+      if (Number(availablePercent) < 30) status = 'Critical';
+      else if (Number(availablePercent) < 75) status = 'Moderate';
+
+      return (
+        <div className="bg-white dark:bg-gray-800 p-3 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700">
+          <p className="font-semibold text-gray-900 dark:text-white">{dataPoint.time}</p>
+          <p className="text-sm text-gray-600 dark:text-gray-400">Borrowed: {dataPoint.count}</p>
+          <p className="text-sm text-gray-600 dark:text-gray-400">Available: {availablePercent}%</p>
+          <p className="text-sm font-semibold" style={{ color: dataPoint.color }}>
+            {status}
+          </p>
+        </div>
+      );
+    }
+    return null;
+  };
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-6">
@@ -130,24 +192,64 @@ export default function SportsDashboard({ data, userEmail }: { data: any; userEm
               </TabsList>
 
               {peakTimesData[peakTimeView]?.length > 0 ? (
-                <ResponsiveContainer width="100%" height={300}>
-                  <LineChart data={peakTimesData[peakTimeView]}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="time" angle={-45} textAnchor="end" height={80} />
-                    <YAxis />
-                    <Tooltip />
-                    <Legend />
-                    <Line
-                      type="monotone"
-                      dataKey="count"
-                      stroke="#2563eb"
-                      strokeWidth={2}
-                      name="Borrowings"
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
+                <>
+                  <div className="mb-4 flex flex-wrap items-center gap-4 text-sm">
+                    <div className="flex items-center gap-2">
+                      <div className="w-4 h-4 rounded-full bg-green-500"></div>
+                      <span className="text-gray-600 dark:text-gray-400">Healthy (75%+ available)</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="w-4 h-4 rounded-full bg-yellow-500"></div>
+                      <span className="text-gray-600 dark:text-gray-400">Moderate (30-75% available)</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="w-4 h-4 rounded-full bg-red-500"></div>
+                      <span className="text-gray-600 dark:text-gray-400">Critical (&lt;30% available)</span>
+                    </div>
+                  </div>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <LineChart data={peakTimesData[peakTimeView]}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="time" angle={-45} textAnchor="end" height={80} />
+                      <YAxis label={{ value: 'Borrowed Count', angle: -90, position: 'insideLeft' }} />
+                      <Tooltip content={<CustomTooltip />} />
+                      <Line
+                        type="monotone"
+                        dataKey="count"
+                        stroke="url(#colorGradient)"
+                        strokeWidth={3}
+                        name="Borrowings"
+                        dot={(props: any) => {
+                          const { cx, cy, payload, index } = props;
+                          return (
+                            <circle
+                              key={`dot-${index}-${payload.hour}`}
+                              cx={cx}
+                              cy={cy}
+                              r={5}
+                              fill={payload.color}
+                              stroke={payload.color}
+                              strokeWidth={2}
+                            />
+                          );
+                        }}
+                        activeDot={{ r: 7 }}
+                      />
+                      <defs>
+                        <linearGradient id="colorGradient" x1="0" y1="0" x2="1" y2="0">
+                          {peakTimesData[peakTimeView].map((item: any, index: number) => {
+                            const position = index / (peakTimesData[peakTimeView].length - 1);
+                            return (
+                              <stop key={index} offset={position} stopColor={item.color} />
+                            );
+                          })}
+                        </linearGradient>
+                      </defs>
+                    </LineChart>
+                  </ResponsiveContainer>
+                </>
               ) : (
-                <div className="h-[300px] flex items-center justify-center text-gray-500">
+                <div className="h-[300px] flex items-center justify-center text-gray-500 dark:text-gray-400">
                   No borrowing data for this equipment
                 </div>
               )}
@@ -239,13 +341,23 @@ export default function SportsDashboard({ data, userEmail }: { data: any; userEm
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="equipment" angle={-45} textAnchor="end" height={100} />
                   <YAxis />
-                  <Tooltip />
+                  <Tooltip 
+                    contentStyle={{
+                      backgroundColor: 'var(--color-card)',
+                      border: '1px solid var(--color-border)',
+                      borderRadius: '0.5rem',
+                      color: 'var(--color-card-foreground)'
+                    }}
+                    labelStyle={{
+                      color: 'var(--color-card-foreground)'
+                    }}
+                  />
                   <Legend />
                   <Bar dataKey="runOutCount" fill="#ef4444" name="Times Out of Stock" />
                 </BarChart>
               </ResponsiveContainer>
             ) : (
-              <div className="text-center py-8 text-gray-500">
+              <div className="text-center py-8 text-gray-500 dark:text-gray-400">
                 No run out incidents in last 90 days
               </div>
             )}
