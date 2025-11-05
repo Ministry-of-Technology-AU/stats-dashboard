@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Clock, TrendingUp, AlertTriangle } from 'lucide-react';
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { SignOutButton } from '@/components/SignOutButton';
@@ -238,7 +238,8 @@ export default function SportsDashboard({ data, userEmail }: { data: any; userEm
                       <defs>
                         <linearGradient id="colorGradient" x1="0" y1="0" x2="1" y2="0">
                           {peakTimesData[peakTimeView].map((item: any, index: number) => {
-                            const position = index / (peakTimesData[peakTimeView].length - 1);
+                            const dataLength = peakTimesData[peakTimeView].length;
+                            const position = dataLength > 1 ? index / (dataLength - 1) : 0;
                             return (
                               <stop key={index} offset={position} stopColor={item.color} />
                             );
