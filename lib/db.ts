@@ -30,15 +30,35 @@ export const pool = mysql.createPool({
   keepAliveInitialDelay: 0,
 });
 
-// Test connection on startup
-pool.getConnection()
-  .then(connection => {
-    console.log('✅ Database pool connection test successful');
-    connection.release();
-  })
-  .catch(error => {
-    console.error('❌ Database pool connection test failed:', error.message);
-  });
+// Test connection on startup (non-blocking)
+// This runs asynchronously and doesn't block module loading
+(async () => {
+  let retries = 3;
+  let lastError: Error | null = null;
+
+  for (let i = 0; i < retries; i++) {
+    try {
+      const connection = await pool.getConnection();
+      console.log('✅ Database pool connection test successful');
+      connection.release();
+      return;
+    } catch (error: any) {
+      lastError = error;
+      console.warn(`⚠️ Database connection test attempt ${i + 1}/${retries} failed:`, error.message);
+      if (i < retries - 1) {
+        // Wait before retrying (exponential backoff: 1s, 2s, 4s)
+        const delay = Math.pow(2, i) * 1000;
+        console.log(`🔄 Retrying in ${delay / 1000}s...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+  }
+
+  // Log final failure but don't throw - let the app start anyway
+  console.error('❌ Database pool connection test failed after', retries, 'attempts');
+  console.error('❌ Last error:', lastError?.message);
+  console.log('⚠️ App will continue - database will be retried on first request');
+})();
 
 // Inventory levels for each equipment
 export const INVENTORY_LEVELS = {

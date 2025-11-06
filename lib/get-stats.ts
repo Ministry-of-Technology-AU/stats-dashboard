@@ -1,4 +1,4 @@
-import mysql from 'mysql2/promise';
+import { pool } from './db';
 
 const INVENTORY_LEVELS: Record<string, number> = {
   'Badminton Racquet': 20,
@@ -22,18 +22,11 @@ export async function getStats() {
   let connection;
 
   try {
-    console.log('🔄 Establishing database connection...');
+    console.log('🔄 Getting connection from pool...');
     
-    connection = await mysql.createConnection({
-      host: process.env.DB_HOST || 'localhost',
-      user: process.env.DB_USER,
-      password: process.env.DB_PASSWORD,
-      database: process.env.DB_NAME || 'sportsinventory',
-      port: parseInt(process.env.DB_PORT || '3306'),
-      connectTimeout: 10000, // 10 seconds
-    });
+    connection = await pool.getConnection();
 
-    console.log('✅ Database connection established');
+    console.log('✅ Database connection established from pool');
 
     console.log('📊 Fetching average borrowing duration...');
     const [avgResult]: any = await connection.query(`
@@ -269,8 +262,8 @@ export async function getStats() {
     `);
     console.log('✅ Recent transactions fetched:', recentTransactions.length, 'records');
 
-    await connection.end();
-    console.log('🔒 Database connection closed');
+    connection.release();
+    console.log('🔒 Database connection returned to pool');
 
     return {
       avgBorrowingDuration,
@@ -293,10 +286,10 @@ export async function getStats() {
     
     if (connection) {
       try {
-        await connection.end();
-        console.log('🔒 Database connection closed after error');
+        connection.release();
+        console.log('🔒 Database connection returned to pool after error');
       } catch (closeError: any) {
-        console.error("❌ Error closing connection:", closeError.message);
+        console.error("❌ Error releasing connection:", closeError.message);
       }
     }
     
