@@ -21,24 +21,32 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     async signIn({ user, account, profile }) {
       const email = user.email?.toLowerCase();
       
+      console.log("🔐 Sign-in attempt:", {
+        email,
+        domain: email?.split("@")[1],
+        timestamp: new Date().toISOString()
+      });
+      
       // Check if email exists
       if (!email) {
+        console.log("❌ Sign-in failed: No email provided");
         return false;
       }
 
       // Check if email is in allowed list
       if (!ALLOWED_EMAILS.includes(email)) {
-        console.log(`❌ Unauthorized email attempted: ${email}`);
+        console.log(`❌ Sign-in rejected: Unauthorized email - ${email}`);
+        console.log("📋 Allowed emails:", ALLOWED_EMAILS);
         return false;
       }
 
       // Ensure email is from ashoka.edu.in domain
       if (!email.endsWith(`@${ALLOWED_DOMAIN}`)) {
-        console.log(`❌ Non-Ashoka email attempted: ${email}`);
+        console.log(`❌ Sign-in rejected: Non-Ashoka domain - ${email}`);
         return false;
       }
 
-      console.log(`✅ Authorized login: ${email}`);
+      console.log(`✅ Sign-in approved: ${email}`);
       return true;
     },
     async jwt({ token, user }) {
@@ -59,4 +67,6 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     error: "/auth/error",
   },
   secret: process.env.AUTH_SECRET,
+  trustHost: true, // Required for Vercel deployment
+  debug: process.env.NODE_ENV === "development", // Enable debug logs in dev
 });

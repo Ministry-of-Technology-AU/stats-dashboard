@@ -40,3 +40,4 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 RAILWAY_MYSQL_SETUP.md
+VERCEL_DEPLOYMENT.md
