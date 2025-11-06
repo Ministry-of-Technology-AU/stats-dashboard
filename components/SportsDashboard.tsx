@@ -1,38 +1,63 @@
 'use client';
 
-import React, { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Clock, TrendingUp, AlertTriangle } from 'lucide-react';
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { SignOutButton } from '@/components/SignOutButton';
-import { ThemeToggle } from '@/components/ThemeToggle';
+import { useDashboard } from '@/components/DashboardWrapper';
 
-export default function SportsDashboard({ data, userEmail }: { data: any; userEmail?: string | null }) {
+export default function SportsDashboard({ data: initialData }: { data: any }) {
   const [peakTimeView, setPeakTimeView] = useState('aggregate');
+  const [data, setData] = useState(initialData);
+  const { setRefreshCallback, setIsRefreshing, setLastUpdate } = useDashboard();
 
-  // Inventory levels for each equipment
+  // Fetch data function - shared by manual and auto refresh
+  const fetchData = useCallback(async () => {
+    setIsRefreshing(true);
+    try {
+      const response = await fetch('/api/stats');
+      if (response.ok) {
+        const newData = await response.json();
+        setData(newData);
+        setLastUpdate(new Date());
+      }
+    } catch (error) {
+      console.error('Failed to refresh data:', error);
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [setIsRefreshing, setLastUpdate]);
+
+  // Register refresh callback
+  useEffect(() => {
+    setRefreshCallback(fetchData);
+  }, [setRefreshCallback, fetchData]);
+
+  // Auto-refresh every 30 seconds
+  useEffect(() => {
+    const interval = setInterval(fetchData, 30000);
+    return () => clearInterval(interval);
+  }, [fetchData]);
+
+
+    // Inventory levels for each equipment (matches app5.js exactly)
   const INVENTORY_LEVELS: Record<string, number> = {
-    'badminton racket': 13,
-    'squash': 8,
-    'tennis': 6,
-    'TT': 12,
-    'chess': 2,
-    'carrom coin': 1,
-    'basketball': 8,
-    'football': 8,
-    'volleyball': 4,
-    'yoga mat': 10,
-    'pickleball racket + ball': 8,
-    'cycle': 10,
-    'cricket bat + ball': 2,
-    'weight machine': 1,
-    'boxing gloves': 1,
-    'washroom locker key': 18,
-    'frisbee': 2,
-    'foosball': 2,
-    'daateball': 1,
-    'pool sticks': 5,
+    'Badminton Racquet': 20,
+    'Table Tennis Racquet': 15,
+    'Squash Racquet': 10,
+    'Tennis Racquet': 12,
+    'Pickleball Racquet': 8,
+    'Pool Stick': 5,
+    'Cycle': 7,
+    'Football': 10,
+    'Volleyball': 6,
+    'Basketball': 8,
+    'Fooseball': 2,
+    'Yoga Mat': 5,
+    'Chess': 3,
+    'Cricket Bat': 4,
+    'Frisbee': 4,
   };
 
   const getColorForUsage = (count: number, equipment: string) => {
@@ -44,8 +69,32 @@ export default function SportsDashboard({ data, userEmail }: { data: any; userEm
     return '#ef4444'; // red - critical (70%+ used = 30% or less available)
   };
 
+  const getColorForAvailability = (availabilityPercent: number) => {
+    if (availabilityPercent >= 75) return '#22c55e'; // green - healthy
+    if (availabilityPercent >= 30) return '#eab308'; // yellow - moderate
+    return '#ef4444'; // red - critical
+  };
+
   const formatHourData = (hourlyData: any[], equipment: string) => {
     if (!hourlyData || hourlyData.length === 0) return [];
+    
+    // Special handling for aggregate view
+    if (equipment === 'aggregate') {
+      return hourlyData.map((d: any) => {
+        const hour = Number(d.hour);
+        const count = Number(d.count) || 0;
+        const availabilityPercent = Number(d.availabilityPercent) || 100;
+        return {
+          time: `${hour === 0 ? 12 : hour > 12 ? hour - 12 : hour}:00 ${hour >= 12 ? 'PM' : 'AM'}`,
+          count,
+          availabilityPercent,
+          color: getColorForAvailability(availabilityPercent),
+          hour,
+        };
+      });
+    }
+    
+    // Regular equipment view
     return hourlyData.map((d: any) => {
       const hour = Number(d.hour);
       const count = Number(d.count) || 0;
@@ -62,26 +111,21 @@ export default function SportsDashboard({ data, userEmail }: { data: any; userEm
   const peakTimesData: Record<string, any[]> = {};
   const allEquipment = [
     'aggregate',
-    'badminton racket',
-    'squash',
-    'tennis',
-    'TT',
-    'chess',
-    'carrom coin',
-    'basketball',
-    'football',
-    'volleyball',
-    'yoga mat',
-    'pickleball racket + ball',
-    'cycle',
-    'cricket bat + ball',
-    'weight machine',
-    'boxing gloves',
-    'washroom locker key',
-    'frisbee',
-    'foosball',
-    'daateball',
-    'pool sticks',
+    'Badminton Racquet',
+    'Table Tennis Racquet',
+    'Squash Racquet',
+    'Tennis Racquet',
+    'Pickleball Racquet',
+    'Pool Stick',
+    'Cycle',
+    'Football',
+    'Volleyball',
+    'Basketball',
+    'Fooseball',
+    'Yoga Mat',
+    'Chess',
+    'Cricket Bat',
+    'Frisbee',
   ];
 
   allEquipment.forEach((eq) => {
@@ -92,6 +136,27 @@ export default function SportsDashboard({ data, userEmail }: { data: any; userEm
   const CustomTooltip = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
       const dataPoint = payload[0].payload;
+      
+      // Special handling for aggregate view
+      if (peakTimeView === 'aggregate') {
+        const availabilityPercent = Number(dataPoint.availabilityPercent || 100).toFixed(1);
+        let status = 'Healthy';
+        if (Number(availabilityPercent) < 30) status = 'Critical';
+        else if (Number(availabilityPercent) < 75) status = 'Moderate';
+
+        return (
+          <div className="bg-white dark:bg-gray-800 p-3 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700">
+            <p className="font-semibold text-gray-900 dark:text-white">{dataPoint.time}</p>
+            <p className="text-sm text-gray-600 dark:text-gray-400">Total Borrowed: {dataPoint.count} items</p>
+            <p className="text-sm text-gray-600 dark:text-gray-400">Overall Availability: {availabilityPercent}%</p>
+            <p className="text-sm font-semibold" style={{ color: dataPoint.color }}>
+              {status}
+            </p>
+          </div>
+        );
+      }
+      
+      // Regular equipment view
       const inventoryLevel = INVENTORY_LEVELS[peakTimeView] || 10;
       const usagePercent = ((dataPoint.count / inventoryLevel) * 100).toFixed(0);
       const availablePercent = (100 - Number(usagePercent)).toFixed(0);
@@ -115,60 +180,56 @@ export default function SportsDashboard({ data, userEmail }: { data: any; userEm
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-6">
-      <div className="max-w-7xl mx-auto space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight text-gray-900 dark:text-white">Sports Inventory Dashboard</h1>
-            <p className="text-gray-500 dark:text-gray-400 mt-1">Monitor equipment usage and borrowing patterns</p>
-            {userEmail && (
-              <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">Signed in as {userEmail}</p>
-            )}
-          </div>
-          <div className="flex items-center gap-3">
-            <ThemeToggle />
-            <SignOutButton />
-          </div>
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-3 sm:p-4 md:p-6">
+      <div className="max-w-7xl mx-auto space-y-4 sm:space-y-6">
+        {/* Page Title */}
+        <div>
+          <h1 className="text-xl sm:text-2xl md:text-3xl font-bold tracking-tight text-gray-900 dark:text-white">
+            Sports Inventory Dashboard
+          </h1>
+          <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mt-1">
+            Monitor equipment usage and borrowing patterns • Auto-refreshes every 30s
+          </p>
         </div>
 
         {/* Summary Cards */}
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <div id="overview" className="grid gap-3 sm:gap-4 md:grid-cols-2 lg:grid-cols-3 scroll-mt-6">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Avg Borrowing Duration</CardTitle>
-              <Clock className="h-4 w-4 text-gray-500" />
+              <CardTitle className="text-xs sm:text-sm font-medium">Avg Borrowing Duration</CardTitle>
+              <Clock className="h-3 w-3 sm:h-4 sm:w-4 text-gray-500" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">
+              <div className="text-xl sm:text-2xl font-bold">
                 {data.avgBorrowingDuration?.toFixed(1) || '0'} days
               </div>
-              <p className="text-xs text-gray-500 mt-1">Per equipment checkout</p>
+              <p className="text-[10px] sm:text-xs text-gray-500 mt-1">Per equipment checkout</p>
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Late Return Rate</CardTitle>
-              <AlertTriangle className="h-4 w-4 text-orange-500" />
+              <CardTitle className="text-xs sm:text-sm font-medium">Late Return Rate</CardTitle>
+              <AlertTriangle className="h-3 w-3 sm:h-4 sm:w-4 text-orange-500" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">
+              <div className="text-xl sm:text-2xl font-bold">
                 {data.lateReturnRate?.toFixed(1) || '0'}%
               </div>
-              <p className="text-xs text-gray-500 mt-1">Of all borrowings</p>
+              <p className="text-[10px] sm:text-xs text-gray-500 mt-1">Of all borrowings</p>
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Most Borrowed</CardTitle>
-              <TrendingUp className="h-4 w-4 text-green-500" />
+              <CardTitle className="text-xs sm:text-sm font-medium">Most Borrowed</CardTitle>
+              <TrendingUp className="h-3 w-3 sm:h-4 sm:w-4 text-green-500" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">
+              <div className="text-xl sm:text-2xl font-bold">
                 {data.mostBorrowed?.[0]?.equipment || 'N/A'}
               </div>
-              <p className="text-xs text-gray-500 mt-1">
+              <p className="text-[10px] sm:text-xs text-gray-500 mt-1">
                 {data.mostBorrowed?.[0]?.borrowCount || 0} total borrows
               </p>
             </CardContent>
@@ -176,42 +237,56 @@ export default function SportsDashboard({ data, userEmail }: { data: any; userEm
         </div>
 
         {/* Peak Borrowing Times */}
-        <Card>
+        <Card id="peak-times" className="scroll-mt-6">
           <CardHeader>
-            <CardTitle>Peak Borrowing Times</CardTitle>
-            <CardDescription>Hourly borrowing patterns across equipment</CardDescription>
+            <CardTitle className="text-base sm:text-lg md:text-xl">Peak Borrowing Times</CardTitle>
+            <CardDescription className="text-xs sm:text-sm">Hourly borrowing patterns across equipment</CardDescription>
           </CardHeader>
           <CardContent>
             <Tabs defaultValue="aggregate" onValueChange={setPeakTimeView}>
-              <TabsList className="mb-4 flex-wrap h-auto">
+              <TabsList className="mb-4 grid grid-cols-3 md:grid-cols-5 lg:grid-cols-8 xl:grid-cols-9 h-auto gap-1">
                 {allEquipment.map((eq) => (
-                  <TabsTrigger key={eq} value={eq} className="capitalize">
-                    {eq === 'aggregate' ? 'All Equipment' : eq}
+                  <TabsTrigger 
+                    key={eq} 
+                    value={eq} 
+                    className="capitalize text-[10px] sm:text-xs px-1 sm:px-2 py-1.5 whitespace-nowrap overflow-hidden text-ellipsis"
+                    title={eq === 'aggregate' ? 'All Equipment' : eq}
+                  >
+                    {eq === 'aggregate' ? 'All' : eq.length > 15 ? eq.substring(0, 13) + '...' : eq}
                   </TabsTrigger>
                 ))}
               </TabsList>
 
               {peakTimesData[peakTimeView]?.length > 0 ? (
                 <>
-                  <div className="mb-4 flex flex-wrap items-center gap-4 text-sm">
-                    <div className="flex items-center gap-2">
-                      <div className="w-4 h-4 rounded-full bg-green-500"></div>
-                      <span className="text-gray-600 dark:text-gray-400">Healthy (75%+ available)</span>
+                  <div className="mb-4 flex flex-wrap items-center gap-3 text-xs sm:text-sm">
+                    <div className="flex items-center gap-1.5">
+                      <div className="w-3 h-3 rounded-full bg-green-500"></div>
+                      <span className="text-gray-600 dark:text-gray-400">Healthy (75%+)</span>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <div className="w-4 h-4 rounded-full bg-yellow-500"></div>
-                      <span className="text-gray-600 dark:text-gray-400">Moderate (30-75% available)</span>
+                    <div className="flex items-center gap-1.5">
+                      <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
+                      <span className="text-gray-600 dark:text-gray-400">Moderate (30-75%)</span>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <div className="w-4 h-4 rounded-full bg-red-500"></div>
-                      <span className="text-gray-600 dark:text-gray-400">Critical (&lt;30% available)</span>
+                    <div className="flex items-center gap-1.5">
+                      <div className="w-3 h-3 rounded-full bg-red-500"></div>
+                      <span className="text-gray-600 dark:text-gray-400">Critical (&lt;30%)</span>
                     </div>
                   </div>
-                  <ResponsiveContainer width="100%" height={300}>
-                    <LineChart data={peakTimesData[peakTimeView]}>
+                  <ResponsiveContainer width="100%" height={320}>
+                    <LineChart data={peakTimesData[peakTimeView]} margin={{ top: 5, right: 20, bottom: 60, left: 20 }}>
                       <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="time" angle={-45} textAnchor="end" height={80} />
-                      <YAxis label={{ value: 'Borrowed Count', angle: -90, position: 'insideLeft' }} />
+                      <XAxis 
+                        dataKey="time" 
+                        angle={-45} 
+                        textAnchor="end" 
+                        height={80}
+                        tick={{ fontSize: 11 }}
+                      />
+                      <YAxis 
+                        label={{ value: 'Borrowed Count', angle: -90, position: 'insideLeft', style: { fontSize: 12 } }}
+                        tick={{ fontSize: 11 }}
+                      />
                       <Tooltip content={<CustomTooltip />} />
                       <Line
                         type="monotone"
@@ -259,28 +334,28 @@ export default function SportsDashboard({ data, userEmail }: { data: any; userEm
         </Card>
 
         {/* Most/Least Borrowed */}
-        <div className="grid gap-4 md:grid-cols-2">
+        <div id="utilization" className="grid gap-3 sm:gap-4 md:grid-cols-2 scroll-mt-6">
           <Card>
             <CardHeader>
-              <CardTitle>Most Borrowed Equipment</CardTitle>
-              <CardDescription>Top items</CardDescription>
+              <CardTitle className="text-base sm:text-lg md:text-xl">Most Borrowed Equipment</CardTitle>
+              <CardDescription className="text-xs sm:text-sm">Top items</CardDescription>
             </CardHeader>
             <CardContent>
               {data.mostBorrowed?.length > 0 ? (
-                <div className="space-y-4">
+                <div className="space-y-3 sm:space-y-4">
                   {data.mostBorrowed.map((item: any, idx: number) => (
                     <div key={item.equipment} className="flex items-center">
-                      <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center text-sm font-semibold text-blue-700 dark:text-blue-300 mr-3">
+                      <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center text-xs sm:text-sm font-semibold text-blue-700 dark:text-blue-300 mr-2 sm:mr-3">
                         {idx + 1}
                       </div>
                       <div className="flex-1">
                         <div className="flex items-center justify-between mb-1">
-                          <span className="text-sm font-medium text-gray-900 dark:text-gray-100">{item.equipment}</span>
-                          <span className="text-sm text-gray-500 dark:text-gray-400">{item.borrowCount} borrows</span>
+                          <span className="text-xs sm:text-sm font-medium text-gray-900 dark:text-gray-100">{item.equipment}</span>
+                          <span className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">{item.borrowCount} borrows</span>
                         </div>
-                        <div className="w-full bg-gray-200 dark:bg-black rounded-full h-2 overflow-hidden">
+                        <div className="w-full bg-gray-200 dark:bg-black rounded-full h-1.5 sm:h-2 overflow-hidden">
                           <div
-                            className="bg-blue-600 dark:bg-blue-500 h-2 rounded-full"
+                            className="bg-blue-600 dark:bg-blue-500 h-1.5 sm:h-2 rounded-full"
                             style={{ width: `${Math.min(Number(item.percentage) || 0, 100)}%` }}
                           />
                         </div>
@@ -289,32 +364,32 @@ export default function SportsDashboard({ data, userEmail }: { data: any; userEm
                   ))}
                 </div>
               ) : (
-                <div className="text-center py-8 text-gray-500 dark:text-gray-400">No data</div>
+                <div className="text-center py-8 text-xs sm:text-sm text-gray-500 dark:text-gray-400">No data</div>
               )}
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader>
-              <CardTitle>Least Borrowed Equipment</CardTitle>
-              <CardDescription>Items needing attention</CardDescription>
+              <CardTitle className="text-base sm:text-lg md:text-xl">Least Borrowed Equipment</CardTitle>
+              <CardDescription className="text-xs sm:text-sm">Items needing attention</CardDescription>
             </CardHeader>
             <CardContent>
               {data.leastBorrowed?.length > 0 ? (
-                <div className="space-y-4">
+                <div className="space-y-3 sm:space-y-4">
                   {data.leastBorrowed.map((item: any, idx: number) => (
                     <div key={item.equipment} className="flex items-center">
-                      <div className="w-8 h-8 rounded-full bg-orange-100 dark:bg-orange-900 flex items-center justify-center text-sm font-semibold text-orange-700 dark:text-orange-300 mr-3">
+                      <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-orange-100 dark:bg-orange-900 flex items-center justify-center text-xs sm:text-sm font-semibold text-orange-700 dark:text-orange-300 mr-2 sm:mr-3">
                         {idx + 1}
                       </div>
                       <div className="flex-1">
                         <div className="flex items-center justify-between mb-1">
-                          <span className="text-sm font-medium text-gray-900 dark:text-gray-100">{item.equipment}</span>
-                          <span className="text-sm text-gray-500 dark:text-gray-400">{item.borrowCount} borrows</span>
+                          <span className="text-xs sm:text-sm font-medium text-gray-900 dark:text-gray-100">{item.equipment}</span>
+                          <span className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">{item.borrowCount} borrows</span>
                         </div>
-                        <div className="w-full bg-gray-200 dark:bg-black rounded-full h-2 overflow-hidden">
+                        <div className="w-full bg-gray-200 dark:bg-black rounded-full h-1.5 sm:h-2 overflow-hidden">
                           <div
-                            className="bg-orange-500 dark:bg-orange-400 h-2 rounded-full"
+                            className="bg-orange-500 dark:bg-orange-400 h-1.5 sm:h-2 rounded-full"
                             style={{ width: `${Math.min((Number(item.percentage) || 0) * 3, 100)}%` }}
                           />
                         </div>
@@ -323,25 +398,44 @@ export default function SportsDashboard({ data, userEmail }: { data: any; userEm
                   ))}
                 </div>
               ) : (
-                <div className="text-center py-8 text-gray-500 dark:text-gray-400">No data</div>
+                <div className="text-center py-8 text-xs sm:text-sm text-gray-500 dark:text-gray-400">No data</div>
               )}
             </CardContent>
           </Card>
         </div>
 
         {/* Run-Out Frequency */}
-        <Card>
+        <Card id="stock-outs" className="scroll-mt-6">
           <CardHeader>
-            <CardTitle>Most Frequently Run Out Equipment</CardTitle>
-            <CardDescription>Equipment that runs out of stock most often (last 90 days)</CardDescription>
+            <CardTitle className="text-base sm:text-lg md:text-xl">Equipment Stock-Out Analysis</CardTitle>
+            <CardDescription className="text-xs sm:text-sm">Days equipment reached 0% availability in the past 90 days</CardDescription>
           </CardHeader>
           <CardContent>
             {data.runOutFrequency?.length > 0 ? (
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={data.runOutFrequency}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="equipment" angle={-45} textAnchor="end" height={100} />
-                  <YAxis />
+              <ResponsiveContainer width="100%" height={400}>
+                <BarChart data={data.runOutFrequency} margin={{ top: 20, right: 30, bottom: 100, left: 60 }}>
+                  <CartesianGrid strokeDasharray="3 3" className="stroke-gray-200 dark:stroke-gray-700" />
+                  <XAxis 
+                    dataKey="equipment" 
+                    angle={-45} 
+                    textAnchor="end" 
+                    height={100}
+                    tick={{ fontSize: 11 }}
+                    interval={0}
+                  />
+                  <YAxis 
+                    tick={{ fontSize: 11 }}
+                    label={{ 
+                      value: 'Days at 0% Availability', 
+                      angle: -90, 
+                      position: 'insideLeft',
+                      style: { 
+                        textAnchor: 'middle',
+                        fontSize: 12,
+                        fill: 'var(--color-foreground)'
+                      }
+                    }} 
+                  />
                   <Tooltip 
                     contentStyle={{
                       backgroundColor: 'var(--color-card)',
@@ -352,14 +446,82 @@ export default function SportsDashboard({ data, userEmail }: { data: any; userEm
                     labelStyle={{
                       color: 'var(--color-card-foreground)'
                     }}
+                    formatter={(value: any) => [`${value} days`, 'Stock-Outs']}
                   />
-                  <Legend />
-                  <Bar dataKey="runOutCount" fill="#ef4444" name="Times Out of Stock" />
+                  <Legend 
+                    verticalAlign="top" 
+                    height={36}
+                    wrapperStyle={{ paddingBottom: '10px' }}
+                  />
+                  <Bar 
+                    dataKey="runOutCount" 
+                    fill="#ef4444" 
+                    name="Days at 0% Availability"
+                    radius={[4, 4, 0, 0]}
+                  />
                 </BarChart>
               </ResponsiveContainer>
             ) : (
-              <div className="text-center py-8 text-gray-500 dark:text-gray-400">
-                No run out incidents in last 90 days
+              <div className="text-center py-8 text-xs sm:text-sm text-gray-500 dark:text-gray-400">
+                No equipment data available
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Recent Transactions */}
+        <Card id="transactions" className="scroll-mt-6">
+          <CardHeader>
+            <CardTitle className="text-base sm:text-lg md:text-xl">Recent Transactions</CardTitle>
+            <CardDescription className="text-xs sm:text-sm">Live log of equipment borrowing and returns</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {data.recentTransactions?.length > 0 ? (
+              <div className="space-y-2 max-h-96 overflow-y-auto">
+                {data.recentTransactions.map((txn: any) => {
+                  const isBorrow = !txn.inTime || new Date(txn.outTime) > new Date(txn.inTime || 0);
+                  const displayTime = isBorrow ? txn.outTime : txn.inTime;
+                  const time = new Date(displayTime).toLocaleString('en-US', {
+                    month: 'short',
+                    day: 'numeric',
+                    hour: 'numeric',
+                    minute: '2-digit',
+                    hour12: true
+                  });
+                  
+                  return (
+                    <div
+                      key={`${txn.id}-${isBorrow ? 'out' : 'in'}`}
+                      className="flex items-center justify-between p-2 sm:p-3 rounded-lg bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                    >
+                      <div className="flex items-center gap-2 sm:gap-4">
+                        <div className={`w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full ${isBorrow ? 'bg-red-500' : 'bg-green-500'}`} />
+                        <div>
+                          <p className="text-xs sm:text-sm font-medium text-gray-900 dark:text-white">
+                            {isBorrow ? 'Borrowed' : 'Returned'} {isBorrow ? txn.outNum : txn.inNum}x {txn.equipment}
+                          </p>
+                          <p className="text-[10px] sm:text-xs text-gray-600 dark:text-gray-400">
+                            {txn.name} • ID: {txn.studentId}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-[10px] sm:text-xs font-medium text-gray-900 dark:text-white">{time}</p>
+                        <p className={`text-[9px] sm:text-[10px] ${
+                          txn.status === 'LATE' ? 'text-red-500' : 
+                          txn.status === 'PENDING' ? 'text-yellow-500' : 
+                          'text-green-500'
+                        }`}>
+                          {txn.status}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="text-center py-8 text-xs sm:text-sm text-gray-500 dark:text-gray-400">
+                No recent transactions
               </div>
             )}
           </CardContent>

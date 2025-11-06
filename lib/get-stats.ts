@@ -1,26 +1,21 @@
 import mysql from 'mysql2/promise';
 
 const INVENTORY_LEVELS: Record<string, number> = {
-  'badminton racket': 13,
-  'squash': 8,
-  'tennis': 6,
-  'TT': 12,
-  'chess': 2,
-  'carrom coin': 1,
-  'basketball': 8,
-  'football': 8,
-  'volleyball': 4,
-  'yoga mat': 10,
-  'pickleball racket + ball': 8,
-  'cycle': 10,
-  'cricket bat + ball': 2,
-  'weight machine': 1,
-  'boxing gloves': 1,
-  'washroom locker key': 18,
-  'frisbee': 2,
-  'foosball': 2,
-  'daateball': 1,
-  'pool sticks': 5,
+  'Badminton Racquet': 20,
+  'Table Tennis Racquet': 15,
+  'Squash Racquet': 10,
+  'Tennis Racquet': 12,
+  'Pickleball Racquet': 8,
+  'Pool Stick': 5,
+  'Cycle': 7,
+  'Football': 10,
+  'Volleyball': 6,
+  'Basketball': 8,
+  'Fooseball': 2,
+  'Yoga Mat': 5,
+  'Chess': 3,
+  'Cricket Bat': 4,
+  'Frisbee': 4,
 };
 
 export async function getStats() {
@@ -53,42 +48,97 @@ export async function getStats() {
     `);
     const lateReturnRate = Number(lateResult[0]?.lateReturnRate) || 0;
 
-    const [peakTimesAggregate]: any = await connection.query(`
-      SELECT 
-        HOUR(outTime) as hour,
-        COUNT(*) as count
-      FROM sports 
-      WHERE outTime IS NOT NULL
-      GROUP BY HOUR(outTime)
-      ORDER BY hour
-    `);
-
     const equipmentList = Object.keys(INVENTORY_LEVELS);
-    const peakBorrowingTimes: any = { aggregate: peakTimesAggregate };
+    const peakBorrowingTimes: any = {};
+
+    // Calculate total inventory across all equipment
+    const totalInventory = Object.values(INVENTORY_LEVELS).reduce((sum, val) => sum + val, 0);
+
+    // Calculate aggregate view (overall availability percentage across all equipment)
+    const aggregateData: any = Array.from({ length: 24 }, (_, hour) => ({
+      hour,
+      count: 0,
+      totalBorrowed: 0,
+      totalCapacity: totalInventory,
+      availabilityPercent: 100,
+    }));
 
     for (const equipment of equipmentList) {
-      const [equipmentPeakTimes]: any = await connection.query(`
-        SELECT 
-          HOUR(outTime) as hour,
-          COUNT(*) as count
-        FROM sports 
-        WHERE LOWER(equipment) = LOWER(?) AND outTime IS NOT NULL
-        GROUP BY HOUR(outTime)
-        ORDER BY hour
-      `, [equipment]);
-
+      // Calculate borrowed count at each hour by tracking borrows and returns
       const fullDayData = Array.from({ length: 24 }, (_, hour) => ({
         hour,
         count: 0,
       }));
 
-      equipmentPeakTimes.forEach((row: any) => {
-        const idx = fullDayData.findIndex((d) => d.hour === row.hour);
-        if (idx !== -1) fullDayData[idx].count = row.count;
-      });
+      // Get all transactions for this equipment from today
+      const [transactions]: any = await connection.query(`
+        SELECT 
+          HOUR(outTime) as outHour,
+          outNum,
+          HOUR(inTime) as inHour,
+          inNum,
+          status
+        FROM sports 
+        WHERE LOWER(equipment) = LOWER(?) 
+          AND DATE(outTime) = CURDATE()
+        ORDER BY outTime, inTime
+      `, [equipment]);
+
+      // Also get currently pending items from previous days
+      const [previousPending]: any = await connection.query(`
+        SELECT 
+          COALESCE(SUM(outNum), 0) as totalBorrowed
+        FROM sports 
+        WHERE LOWER(equipment) = LOWER(?) 
+          AND status = 'PENDING'
+          AND DATE(outTime) < CURDATE()
+      `, [equipment]);
+
+      const startingBorrowed = Number(previousPending[0]?.totalBorrowed) || 0;
+
+      // Calculate net borrowed at each hour
+      for (let hour = 0; hour < 24; hour++) {
+        let netBorrowed = startingBorrowed;
+
+        transactions.forEach((txn: any) => {
+          const outHour = txn.outHour !== null ? Number(txn.outHour) : null;
+          const inHour = txn.inHour !== null ? Number(txn.inHour) : null;
+          const outNum = Number(txn.outNum) || 0;
+          const inNum = Number(txn.inNum) || 0;
+
+          // Add borrows that happened at or before this hour
+          if (outHour !== null && outHour <= hour) {
+            netBorrowed += outNum;
+          }
+
+          // Subtract returns that happened at or before this hour
+          if (inHour !== null && inHour <= hour) {
+            netBorrowed -= inNum;
+          }
+        });
+
+        fullDayData[hour].count = Math.max(0, netBorrowed);
+        
+        // Add to aggregate view (sum of all equipment borrowed at this hour)
+        aggregateData[hour].totalBorrowed += Math.max(0, netBorrowed);
+      }
 
       peakBorrowingTimes[equipment] = fullDayData;
     }
+    
+    // Convert aggregate to percentage-based for availability ratio
+    aggregateData.forEach((hourData: any) => {
+      const borrowed = hourData.totalBorrowed;
+      const available = totalInventory - borrowed;
+      const availabilityPercent = (available / totalInventory) * 100;
+      
+      // Store as "usage percent" for color coding (inverse of availability)
+      hourData.count = borrowed; // Keep borrowed count for display
+      hourData.availabilityPercent = availabilityPercent;
+    });
+    
+    // Add aggregate view
+    peakBorrowingTimes['aggregate'] = aggregateData;
 
     const [mostBorrowed]: any = await connection.query(`
       SELECT 
@@ -112,34 +162,39 @@ export async function getStats() {
       LIMIT 5
     `);
 
+    // Calculate run-out frequency: days when equipment availability reached 0% in past 90 days
     const [runOutData]: any = await connection.query(`
       SELECT 
         equipment,
         DATE(outTime) as borrowDate,
-        COUNT(*) as dailyBorrows
+        SUM(outNum) as totalBorrowedOnDay
       FROM sports 
       WHERE outTime >= DATE_SUB(NOW(), INTERVAL 90 DAY)
       GROUP BY equipment, DATE(outTime)
     `);
 
     const runOutFrequency: any = {};
+    
+    // Initialize all equipment
+    equipmentList.forEach(eq => {
+      runOutFrequency[eq] = {
+        equipment: eq,
+        runOutCount: 0,
+        capacity: INVENTORY_LEVELS[eq] || 5
+      };
+    });
+
+    // Count days when borrowed items >= total inventory (0% available)
     runOutData.forEach((row: any) => {
       const equipment = row.equipment;
-      const inventoryLevel =
-        INVENTORY_LEVELS[equipment?.toLowerCase()] ||
-        INVENTORY_LEVELS[equipment] ||
-        5;
+      const inventoryLevel = INVENTORY_LEVELS[equipment] || 5;
+      const totalBorrowedOnDay = Number(row.totalBorrowedOnDay) || 0;
 
-      if (!runOutFrequency[equipment]) {
-        runOutFrequency[equipment] = { 
-          equipment, 
-          runOutCount: 0,
-          capacity: inventoryLevel 
-        };
-      }
-
-      if (row.dailyBorrows >= inventoryLevel * 0.8) {
-        runOutFrequency[equipment].runOutCount++;
+      if (runOutFrequency[equipment]) {
+        // If borrowed >= total inventory, it ran out (0% available)
+        if (totalBorrowedOnDay >= inventoryLevel) {
+          runOutFrequency[equipment].runOutCount++;
+        }
       }
     });
 
@@ -147,7 +202,7 @@ export async function getStats() {
     const [currentBorrowings]: any = await connection.query(`
       SELECT 
         equipment,
-        COUNT(*) as currentlyBorrowed
+        SUM(outNum) as currentlyBorrowed
       FROM sports 
       WHERE status = 'PENDING'
       GROUP BY equipment
@@ -156,7 +211,7 @@ export async function getStats() {
     const runOutFrequencyArray = Object.values(runOutFrequency)
       .map((item: any) => {
         const borrowed = currentBorrowings.find((b: any) => 
-          b.equipment.toLowerCase() === item.equipment.toLowerCase()
+          b.equipment === item.equipment
         );
         const currentlyBorrowed = borrowed ? Number(borrowed.currentlyBorrowed) : 0;
         const utilizationRate = (currentlyBorrowed / item.capacity) * 100;
@@ -171,6 +226,27 @@ export async function getStats() {
       .sort((a: any, b: any) => b.runOutCount - a.runOutCount)
       .slice(0, 5);
 
+    // Get recent transactions (last 50)
+    const [recentTransactions]: any = await connection.query(`
+      SELECT 
+        s.id,
+        s.studentId,
+        s.name,
+        s.equipment,
+        s.outNum,
+        s.inNum,
+        s.outTime,
+        s.inTime,
+        s.status
+      FROM sports s
+      ORDER BY 
+        CASE 
+          WHEN s.inTime IS NOT NULL THEN s.inTime 
+          ELSE s.outTime 
+        END DESC
+      LIMIT 50
+    `);
+
     await connection.end();
 
     return {
@@ -180,6 +256,7 @@ export async function getStats() {
       mostBorrowed,
       leastBorrowed,
       runOutFrequency: runOutFrequencyArray,
+      recentTransactions,
     };
 
   } catch (error: any) {
