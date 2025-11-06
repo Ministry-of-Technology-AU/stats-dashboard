@@ -142,6 +142,7 @@ export async function getStats() {
       // Store as "usage percent" for color coding (inverse of availability)
       hourData.count = borrowed; // Keep borrowed count for display
       hourData.availabilityPercent = availabilityPercent;
+      hourData.totalInventory = totalInventory; // Add total inventory for calculation
     });
     
     // Add aggregate view

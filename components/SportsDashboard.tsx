@@ -100,11 +100,15 @@ export default function SportsDashboard({ data: initialData }: { data: any }) {
     if (equipment === 'aggregate') {
       return hourlyData.map((d: any) => {
         const hour = Number(d.hour);
-        const count = Number(d.count) || 0;
+        const borrowed = Number(d.count) || 0;
         const availabilityPercent = Number(d.availabilityPercent) || 100;
+        const totalInventory = Number(d.totalInventory) || 119; // Fallback to default
+        // Invert: show available items instead of borrowed items
+        const available = totalInventory - borrowed;
         return {
           time: `${hour === 0 ? 12 : hour > 12 ? hour - 12 : hour}:00 ${hour >= 12 ? 'PM' : 'AM'}`,
-          count,
+          count: available,  // Now represents available items
+          borrowed,          // Keep borrowed for tooltip
           availabilityPercent,
           color: getColorForAvailability(availabilityPercent),
           hour,
@@ -115,11 +119,15 @@ export default function SportsDashboard({ data: initialData }: { data: any }) {
     // Regular equipment view
     return hourlyData.map((d: any) => {
       const hour = Number(d.hour);
-      const count = Number(d.count) || 0;
+      const borrowed = Number(d.count) || 0;
+      const inventoryLevel = INVENTORY_LEVELS[equipment] || 10;
+      // Invert: show available items instead of borrowed items
+      const available = inventoryLevel - borrowed;
       return {
         time: `${hour === 0 ? 12 : hour > 12 ? hour - 12 : hour}:00 ${hour >= 12 ? 'PM' : 'AM'}`,
-        count,
-        color: getColorForUsage(count, equipment),
+        count: available,  // Now represents available items
+        borrowed,          // Keep borrowed for tooltip
+        color: getColorForUsage(borrowed, equipment),
         hour,
       };
     });
@@ -165,7 +173,8 @@ export default function SportsDashboard({ data: initialData }: { data: any }) {
         return (
           <div className="bg-white dark:bg-gray-800 p-3 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700">
             <p className="font-semibold text-gray-900 dark:text-white">{dataPoint.time}</p>
-            <p className="text-sm text-gray-600 dark:text-gray-400">Total Borrowed: {dataPoint.count} items</p>
+            <p className="text-sm text-gray-600 dark:text-gray-400">Available: {dataPoint.count} items</p>
+            <p className="text-sm text-gray-600 dark:text-gray-400">Borrowed: {dataPoint.borrowed} items</p>
             <p className="text-sm text-gray-600 dark:text-gray-400">Overall Availability: {availabilityPercent}%</p>
             <p className="text-sm font-semibold" style={{ color: dataPoint.color }}>
               {status}
@@ -186,7 +195,8 @@ export default function SportsDashboard({ data: initialData }: { data: any }) {
       return (
         <div className="bg-white dark:bg-gray-800 p-3 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700">
           <p className="font-semibold text-gray-900 dark:text-white">{dataPoint.time}</p>
-          <p className="text-sm text-gray-600 dark:text-gray-400">Borrowed: {dataPoint.count}</p>
+          <p className="text-sm text-gray-600 dark:text-gray-400">Available: {dataPoint.count}</p>
+          <p className="text-sm text-gray-600 dark:text-gray-400">Borrowed: {dataPoint.borrowed}</p>
           <p className="text-sm text-gray-600 dark:text-gray-400">Available: {availablePercent}%</p>
           <p className="text-sm font-semibold" style={{ color: dataPoint.color }}>
             {status}
@@ -302,7 +312,7 @@ export default function SportsDashboard({ data: initialData }: { data: any }) {
                         tick={{ fontSize: 11 }}
                       />
                       <YAxis 
-                        label={{ value: 'Borrowed Count', angle: -90, position: 'insideLeft', style: { fontSize: 12 } }}
+                        label={{ value: 'Available Count', angle: -90, position: 'insideLeft', style: { fontSize: 12 } }}
                         tick={{ fontSize: 11 }}
                       />
                       <Tooltip content={<CustomTooltip />} />
