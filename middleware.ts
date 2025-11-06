@@ -16,11 +16,13 @@ export default auth((req) => {
 
   // Check if user is authenticated
   if (!req.auth) {
+    console.log("⚠️ Unauthorized access attempt to:", pathname);
     const signInUrl = new URL("/auth/signin", req.url);
     signInUrl.searchParams.set("callbackUrl", pathname);
     return NextResponse.redirect(signInUrl);
   }
 
+  console.log("✅ Authorized access to:", pathname, "by", req.auth.user?.email);
   return NextResponse.next();
 });
 

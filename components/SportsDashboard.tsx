@@ -16,14 +16,32 @@ export default function SportsDashboard({ data: initialData }: { data: any }) {
   const fetchData = useCallback(async () => {
     setIsRefreshing(true);
     try {
-      const response = await fetch('/api/stats');
-      if (response.ok) {
-        const newData = await response.json();
-        setData(newData);
-        setLastUpdate(new Date());
+      console.log('🔄 Refreshing dashboard data...');
+      const response = await fetch('/api/stats', {
+        cache: 'no-store',
+        headers: {
+          'Cache-Control': 'no-cache',
+        },
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
       }
-    } catch (error) {
-      console.error('Failed to refresh data:', error);
+      
+      const newData = await response.json();
+      setData(newData);
+      setLastUpdate(new Date());
+      console.log('✅ Dashboard data refreshed successfully');
+    } catch (error: any) {
+      console.error('❌ Failed to refresh dashboard data:', error.message);
+      // Show error notification to user
+      if (typeof window !== 'undefined') {
+        const event = new CustomEvent('dashboard-error', { 
+          detail: { message: error.message } 
+        });
+        window.dispatchEvent(event);
+      }
     } finally {
       setIsRefreshing(false);
     }

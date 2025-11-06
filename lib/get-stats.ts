@@ -22,13 +22,20 @@ export async function getStats() {
   let connection;
 
   try {
+    console.log('🔄 Establishing database connection...');
+    
     connection = await mysql.createConnection({
       host: process.env.DB_HOST || 'localhost',
       user: process.env.DB_USER,
       password: process.env.DB_PASSWORD,
       database: process.env.DB_NAME || 'sportsinventory',
+      port: parseInt(process.env.DB_PORT || '3306'),
+      connectTimeout: 10000, // 10 seconds
     });
 
+    console.log('✅ Database connection established');
+
+    console.log('📊 Fetching average borrowing duration...');
     const [avgResult]: any = await connection.query(`
       SELECT 
         COALESCE(AVG(TIMESTAMPDIFF(DAY, outTime, inTime)), 0) as avgDuration
@@ -36,7 +43,9 @@ export async function getStats() {
       WHERE status = 'RETURNED' AND inTime IS NOT NULL AND outTime IS NOT NULL
     `);
     const avgBorrowingDuration = Number(avgResult[0]?.avgDuration) || 0;
+    console.log('✅ Average duration:', avgBorrowingDuration.toFixed(2), 'days');
 
+    console.log('📊 Fetching late return rate...');
     const [lateResult]: any = await connection.query(`
       SELECT 
         COALESCE(
@@ -47,12 +56,14 @@ export async function getStats() {
       WHERE status IN ('LATE', 'RETURNED', 'PENDING')
     `);
     const lateReturnRate = Number(lateResult[0]?.lateReturnRate) || 0;
+    console.log('✅ Late return rate:', lateReturnRate.toFixed(2), '%');
 
     const equipmentList = Object.keys(INVENTORY_LEVELS);
     const peakBorrowingTimes: any = {};
 
     // Calculate total inventory across all equipment
     const totalInventory = Object.values(INVENTORY_LEVELS).reduce((sum, val) => sum + val, 0);
+    console.log('📦 Total inventory capacity:', totalInventory);
 
     // Calculate aggregate view (overall availability percentage across all equipment)
     const aggregateData: any = Array.from({ length: 24 }, (_, hour) => ({
@@ -63,6 +74,7 @@ export async function getStats() {
       availabilityPercent: 100,
     }));
 
+    console.log('🔄 Processing', equipmentList.length, 'equipment types...');
     for (const equipment of equipmentList) {
       // Calculate borrowed count at each hour by tracking borrows and returns
       const fullDayData = Array.from({ length: 24 }, (_, hour) => ({
@@ -139,7 +151,9 @@ export async function getStats() {
     
     // Add aggregate view
     peakBorrowingTimes['aggregate'] = aggregateData;
+    console.log('✅ Peak borrowing times calculated');
 
+    console.log('📊 Fetching most borrowed equipment...');
     const [mostBorrowed]: any = await connection.query(`
       SELECT 
         equipment,
@@ -150,7 +164,9 @@ export async function getStats() {
       ORDER BY borrowCount DESC
       LIMIT 5
     `);
+    console.log('✅ Top 5 most borrowed items found');
 
+    console.log('📊 Fetching least borrowed equipment...');
     const [leastBorrowed]: any = await connection.query(`
       SELECT 
         equipment,
@@ -161,8 +177,10 @@ export async function getStats() {
       ORDER BY borrowCount ASC
       LIMIT 5
     `);
+    console.log('✅ Least borrowed items found');
 
     // Calculate run-out frequency: days when equipment availability reached 0% in past 90 days
+    console.log('📊 Calculating run-out frequency (past 90 days)...');
     const [runOutData]: any = await connection.query(`
       SELECT 
         equipment,
@@ -199,6 +217,7 @@ export async function getStats() {
     });
 
     // Get current borrowing status for utilization rate
+    console.log('📊 Fetching current borrowing status...');
     const [currentBorrowings]: any = await connection.query(`
       SELECT 
         equipment,
@@ -225,8 +244,10 @@ export async function getStats() {
       })
       .sort((a: any, b: any) => b.runOutCount - a.runOutCount)
       .slice(0, 5);
+    console.log('✅ Run-out frequency calculated');
 
     // Get recent transactions (last 50)
+    console.log('📊 Fetching recent transactions...');
     const [recentTransactions]: any = await connection.query(`
       SELECT 
         s.id,
@@ -246,8 +267,10 @@ export async function getStats() {
         END DESC
       LIMIT 50
     `);
+    console.log('✅ Recent transactions fetched:', recentTransactions.length, 'records');
 
     await connection.end();
+    console.log('🔒 Database connection closed');
 
     return {
       avgBorrowingDuration,
@@ -260,10 +283,24 @@ export async function getStats() {
     };
 
   } catch (error: any) {
-    console.error("❌ Error fetching stats:", error.message);
+    console.error("❌ Error fetching stats:", {
+      message: error.message,
+      code: error.code,
+      errno: error.errno,
+      sqlState: error.sqlState,
+      sqlMessage: error.sqlMessage,
+    });
+    
     if (connection) {
-      await connection.end();
+      try {
+        await connection.end();
+        console.log('🔒 Database connection closed after error');
+      } catch (closeError: any) {
+        console.error("❌ Error closing connection:", closeError.message);
+      }
     }
-    throw error;
+    
+    // Throw with more context
+    throw new Error(`Database error: ${error.message} ${error.sqlMessage || ''}`);
   }
 }
