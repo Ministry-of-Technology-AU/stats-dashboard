@@ -37,8 +37,8 @@ export const ALLOWED_EMAILS = [
 
 Make sure `.env.local` has:
 ```
-GOOGLE_CLIENT_ID=304100220971-qpr61ggq9jfp0tqc1iqpefoa1mrgki0f.apps.googleusercontent.com
-GOOGLE_CLIENT_SECRET=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
-AUTH_SECRET=CduNQQ20zrCNel8wORO5oMwWFBtSwwa4SVvpqv9qBQA=
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
+AUTH_SECRET=
 NEXTAUTH_URL=http://localhost:3001
 ```
