@@ -4,7 +4,9 @@
 export const ALLOWED_EMAILS = [
   "nitin.s_ug2025@ashoka.edu.in",
   "sports@ashoka.edu.in",
-  "soham.tulsyan_ug2023@ashoka.edu.in"
+  "soham.tulsyan_ug2023@ashoka.edu.in",
+  "vaani.goenka_ug2024@ashoka.edu.in",
+  "vansh.bothra_ug25@ashoka.edu.in",
   // Add more authorized emails below:
   // "example@ashoka.edu.in",
 ];
