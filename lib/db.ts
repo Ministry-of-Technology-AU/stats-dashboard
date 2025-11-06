@@ -33,7 +33,7 @@ export const pool = mysql.createPool({
 // Test connection on startup (non-blocking)
 // This runs asynchronously and doesn't block module loading
 (async () => {
-  let retries = 3;
+  const retries = 3;
   let lastError: Error | null = null;
 
   for (let i = 0; i < retries; i++) {

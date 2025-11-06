@@ -75,28 +75,30 @@ export async function getStats() {
         count: 0,
       }));
 
-      // Get all transactions for this equipment from today
+      // Get all transactions for this equipment from the last 2 days
+      // (handles timezone differences - server may be behind IST by a day)
       const [transactions]: any = await connection.query(`
         SELECT 
           HOUR(outTime) as outHour,
           outNum,
           HOUR(inTime) as inHour,
           inNum,
-          status
+          status,
+          DATE(outTime) as txnDate
         FROM sports 
         WHERE LOWER(equipment) = LOWER(?) 
-          AND DATE(outTime) = CURDATE()
+          AND DATE(outTime) >= DATE_SUB(CURDATE(), INTERVAL 1 DAY)
         ORDER BY outTime, inTime
       `, [equipment]);
 
-      // Also get currently pending items from previous days
+      // Also get currently pending items from before the 2-day window
       const [previousPending]: any = await connection.query(`
         SELECT 
           COALESCE(SUM(outNum), 0) as totalBorrowed
         FROM sports 
         WHERE LOWER(equipment) = LOWER(?) 
           AND status = 'PENDING'
-          AND DATE(outTime) < CURDATE()
+          AND DATE(outTime) < DATE_SUB(CURDATE(), INTERVAL 1 DAY)
       `, [equipment]);
 
       const startingBorrowed = Number(previousPending[0]?.totalBorrowed) || 0;
