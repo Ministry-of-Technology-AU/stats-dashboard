@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Clock, TrendingUp, AlertTriangle } from 'lucide-react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { useDashboard } from '@/components/DashboardWrapper';
 
 export default function SportsDashboard({ data: initialData }: { data: any }) {
@@ -102,13 +102,9 @@ export default function SportsDashboard({ data: initialData }: { data: any }) {
         const hour = Number(d.hour);
         const borrowed = Number(d.count) || 0;
         const availabilityPercent = Number(d.availabilityPercent) || 100;
-        const totalInventory = Number(d.totalInventory) || 119; // Fallback to default
-        // Invert: show available items instead of borrowed items
-        const available = totalInventory - borrowed;
         return {
           time: `${hour === 0 ? 12 : hour > 12 ? hour - 12 : hour}:00 ${hour >= 12 ? 'PM' : 'AM'}`,
-          count: available,  // Now represents available items
-          borrowed,          // Keep borrowed for tooltip
+          count: borrowed,  // Show borrowed count (flows upward)
           availabilityPercent,
           color: getColorForAvailability(availabilityPercent),
           hour,
@@ -120,13 +116,9 @@ export default function SportsDashboard({ data: initialData }: { data: any }) {
     return hourlyData.map((d: any) => {
       const hour = Number(d.hour);
       const borrowed = Number(d.count) || 0;
-      const inventoryLevel = INVENTORY_LEVELS[equipment] || 10;
-      // Invert: show available items instead of borrowed items
-      const available = inventoryLevel - borrowed;
       return {
         time: `${hour === 0 ? 12 : hour > 12 ? hour - 12 : hour}:00 ${hour >= 12 ? 'PM' : 'AM'}`,
-        count: available,  // Now represents available items
-        borrowed,          // Keep borrowed for tooltip
+        count: borrowed,  // Show borrowed count (flows upward)
         color: getColorForUsage(borrowed, equipment),
         hour,
       };
@@ -173,8 +165,7 @@ export default function SportsDashboard({ data: initialData }: { data: any }) {
         return (
           <div className="bg-white dark:bg-gray-800 p-3 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700">
             <p className="font-semibold text-gray-900 dark:text-white">{dataPoint.time}</p>
-            <p className="text-sm text-gray-600 dark:text-gray-400">Available: {dataPoint.count} items</p>
-            <p className="text-sm text-gray-600 dark:text-gray-400">Borrowed: {dataPoint.borrowed} items</p>
+            <p className="text-sm text-gray-600 dark:text-gray-400">Borrowed: {dataPoint.count} items</p>
             <p className="text-sm text-gray-600 dark:text-gray-400">Overall Availability: {availabilityPercent}%</p>
             <p className="text-sm font-semibold" style={{ color: dataPoint.color }}>
               {status}
@@ -185,8 +176,9 @@ export default function SportsDashboard({ data: initialData }: { data: any }) {
       
       // Regular equipment view
       const inventoryLevel = INVENTORY_LEVELS[peakTimeView] || 10;
-      const usagePercent = ((dataPoint.count / inventoryLevel) * 100).toFixed(0);
-      const availablePercent = (100 - Number(usagePercent)).toFixed(0);
+      const borrowed = dataPoint.count;
+      const available = inventoryLevel - borrowed;
+      const availablePercent = ((available / inventoryLevel) * 100).toFixed(0);
       
       let status = 'Healthy';
       if (Number(availablePercent) < 30) status = 'Critical';
@@ -195,9 +187,9 @@ export default function SportsDashboard({ data: initialData }: { data: any }) {
       return (
         <div className="bg-white dark:bg-gray-800 p-3 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700">
           <p className="font-semibold text-gray-900 dark:text-white">{dataPoint.time}</p>
-          <p className="text-sm text-gray-600 dark:text-gray-400">Available: {dataPoint.count}</p>
-          <p className="text-sm text-gray-600 dark:text-gray-400">Borrowed: {dataPoint.borrowed}</p>
-          <p className="text-sm text-gray-600 dark:text-gray-400">Available: {availablePercent}%</p>
+          <p className="text-sm text-gray-600 dark:text-gray-400">Borrowed: {borrowed}</p>
+          <p className="text-sm text-gray-600 dark:text-gray-400">Available: {available}</p>
+          <p className="text-sm text-gray-600 dark:text-gray-400">Availability: {availablePercent}%</p>
           <p className="text-sm font-semibold" style={{ color: dataPoint.color }}>
             {status}
           </p>
@@ -297,31 +289,44 @@ export default function SportsDashboard({ data: initialData }: { data: any }) {
                     </div>
                   </div>
                   <ResponsiveContainer width="100%" height={300}>
-                    <BarChart data={peakTimesData[peakTimeView]}>
+                    <LineChart data={peakTimesData[peakTimeView]}>
                       <CartesianGrid strokeDasharray="3 3" />
                       <XAxis dataKey="time" angle={-45} textAnchor="end" height={80} />
-                      <YAxis label={{ value: 'Available Count', angle: -90, position: 'insideLeft' }} />
+                      <YAxis label={{ value: 'Borrowed Count', angle: -90, position: 'insideLeft' }} />
                       <Tooltip content={<CustomTooltip />} />
-                      <Bar
+                      <Line
+                        type="monotone"
                         dataKey="count"
-                        name="Available"
-                        radius={[4, 4, 0, 0]}
-                        shape={(props: any) => {
-                          const { x, y, width, height, payload } = props;
+                        stroke="url(#colorGradient)"
+                        strokeWidth={3}
+                        name="Borrowings"
+                        dot={(props: any) => {
+                          const { cx, cy, payload } = props;
                           return (
-                            <rect
-                              x={x}
-                              y={y}
-                              width={width}
-                              height={height}
+                            <circle
+                              cx={cx}
+                              cy={cy}
+                              r={5}
                               fill={payload.color}
-                              rx={4}
-                              ry={4}
+                              stroke={payload.color}
+                              strokeWidth={2}
                             />
                           );
                         }}
+                        activeDot={{ r: 7 }}
                       />
-                    </BarChart>
+                      <defs>
+                        <linearGradient id="colorGradient" x1="0" y1="0" x2="1" y2="0">
+                          {peakTimesData[peakTimeView].map((item: any, index: number) => {
+                            const dataLength = peakTimesData[peakTimeView].length;
+                            const position = dataLength > 1 ? index / (dataLength - 1) : 0;
+                            return (
+                              <stop key={index} offset={position} stopColor={item.color} />
+                            );
+                          })}
+                        </linearGradient>
+                      </defs>
+                    </LineChart>
                   </ResponsiveContainer>
                 </>
               ) : (
