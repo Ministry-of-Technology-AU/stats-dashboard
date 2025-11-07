@@ -162,18 +162,36 @@ export async function getStats() {
     `);
     console.log('✅ Top 5 most borrowed items found');
 
-    console.log('📊 Fetching least borrowed equipment...');
-    const [leastBorrowed]: any = await connection.query(`
-      SELECT 
-        equipment,
-        COUNT(*) as borrowCount,
-        (COUNT(*) * 100.0 / (SELECT COUNT(*) FROM sports)) as percentage
-      FROM sports 
-      GROUP BY equipment
-      ORDER BY borrowCount ASC
-      LIMIT 5
-    `);
-    console.log('✅ Least borrowed items found');
+    // Get list of most borrowed equipment names to exclude from least borrowed
+    const mostBorrowedNames = mostBorrowed.map((item: any) => item.equipment);
+    const excludeList = mostBorrowedNames.length > 0 
+      ? mostBorrowedNames.map(() => '?').join(',')
+      : '';
+
+    console.log('📊 Fetching least borrowed equipment (excluding top 5)...');
+    const [leastBorrowed]: any = excludeList 
+      ? await connection.query(`
+          SELECT 
+            equipment,
+            COUNT(*) as borrowCount,
+            (COUNT(*) * 100.0 / (SELECT COUNT(*) FROM sports)) as percentage
+          FROM sports 
+          WHERE equipment NOT IN (${excludeList})
+          GROUP BY equipment
+          ORDER BY borrowCount ASC
+          LIMIT 5
+        `, mostBorrowedNames)
+      : await connection.query(`
+          SELECT 
+            equipment,
+            COUNT(*) as borrowCount,
+            (COUNT(*) * 100.0 / (SELECT COUNT(*) FROM sports)) as percentage
+          FROM sports 
+          GROUP BY equipment
+          ORDER BY borrowCount ASC
+          LIMIT 5
+        `);
+    console.log('✅ Least borrowed items found (excluding most borrowed)');
 
     // Calculate run-out frequency: days when equipment availability reached 0% in past 90 days
     console.log('📊 Calculating run-out frequency (past 90 days)...');
