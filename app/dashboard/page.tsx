@@ -1,11 +1,5 @@
 import SportsDashboard from '@/components/SportsDashboard';
 import { getStats } from '@/lib/get-stats';
-import { Metadata } from 'next';
-
-export const metadata: Metadata = {
-  title: 'Dashboard',
-  description: 'Real-time sports equipment statistics and analytics',
-};
 
 export default async function DashboardPage() {
   try {
