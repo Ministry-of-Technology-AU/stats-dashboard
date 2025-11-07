@@ -265,56 +265,42 @@ export default function SportsDashboard({ data: initialData }: { data: any }) {
         </div>
 
         {/* Peak Borrowing Times */}
-        <Card id="peak-times" className="scroll-mt-6">
+        <Card>
           <CardHeader>
-            <CardTitle className="text-base sm:text-lg md:text-xl">Peak Borrowing Times</CardTitle>
-            <CardDescription className="text-xs sm:text-sm">Hourly borrowing patterns across equipment</CardDescription>
+            <CardTitle>Peak Borrowing Times</CardTitle>
+            <CardDescription>Hourly borrowing patterns across equipment</CardDescription>
           </CardHeader>
           <CardContent>
             <Tabs defaultValue="aggregate" onValueChange={setPeakTimeView}>
-              <TabsList className="mb-4 grid grid-cols-3 md:grid-cols-5 lg:grid-cols-8 xl:grid-cols-9 h-auto gap-1">
+              <TabsList className="mb-4 flex-wrap h-auto">
                 {allEquipment.map((eq) => (
-                  <TabsTrigger 
-                    key={eq} 
-                    value={eq} 
-                    className="capitalize text-[10px] sm:text-xs px-1 sm:px-2 py-1.5 whitespace-nowrap overflow-hidden text-ellipsis"
-                    title={eq === 'aggregate' ? 'All Equipment' : eq}
-                  >
-                    {eq === 'aggregate' ? 'All' : eq.length > 15 ? eq.substring(0, 13) + '...' : eq}
+                  <TabsTrigger key={eq} value={eq} className="capitalize">
+                    {eq === 'aggregate' ? 'All Equipment' : eq}
                   </TabsTrigger>
                 ))}
               </TabsList>
 
               {peakTimesData[peakTimeView]?.length > 0 ? (
                 <>
-                  <div className="mb-4 flex flex-wrap items-center gap-3 text-xs sm:text-sm">
-                    <div className="flex items-center gap-1.5">
-                      <div className="w-3 h-3 rounded-full bg-green-500"></div>
-                      <span className="text-gray-600 dark:text-gray-400">Healthy (75%+)</span>
+                  <div className="mb-4 flex flex-wrap items-center gap-4 text-sm">
+                    <div className="flex items-center gap-2">
+                      <div className="w-4 h-4 rounded-full bg-green-500"></div>
+                      <span className="text-gray-600 dark:text-gray-400">Healthy (75%+ available)</span>
                     </div>
-                    <div className="flex items-center gap-1.5">
-                      <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
-                      <span className="text-gray-600 dark:text-gray-400">Moderate (30-75%)</span>
+                    <div className="flex items-center gap-2">
+                      <div className="w-4 h-4 rounded-full bg-yellow-500"></div>
+                      <span className="text-gray-600 dark:text-gray-400">Moderate (30-75% available)</span>
                     </div>
-                    <div className="flex items-center gap-1.5">
-                      <div className="w-3 h-3 rounded-full bg-red-500"></div>
-                      <span className="text-gray-600 dark:text-gray-400">Critical (&lt;30%)</span>
+                    <div className="flex items-center gap-2">
+                      <div className="w-4 h-4 rounded-full bg-red-500"></div>
+                      <span className="text-gray-600 dark:text-gray-400">Critical (&lt;30% available)</span>
                     </div>
                   </div>
-                  <ResponsiveContainer width="100%" height={320}>
-                    <BarChart data={peakTimesData[peakTimeView]} margin={{ top: 5, right: 20, bottom: 60, left: 20 }}>
-                      <CartesianGrid strokeDasharray="3 3" className="stroke-gray-200 dark:stroke-gray-700" />
-                      <XAxis 
-                        dataKey="time" 
-                        angle={-45} 
-                        textAnchor="end" 
-                        height={80}
-                        tick={{ fontSize: 11 }}
-                      />
-                      <YAxis 
-                        label={{ value: 'Available Count', angle: -90, position: 'insideLeft', style: { fontSize: 12 } }}
-                        tick={{ fontSize: 11 }}
-                      />
+                  <ResponsiveContainer width="100%" height={300}>
+                    <BarChart data={peakTimesData[peakTimeView]}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="time" angle={-45} textAnchor="end" height={80} />
+                      <YAxis label={{ value: 'Available Count', angle: -90, position: 'insideLeft' }} />
                       <Tooltip content={<CustomTooltip />} />
                       <Bar
                         dataKey="count"
