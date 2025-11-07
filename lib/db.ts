@@ -25,9 +25,12 @@ export const pool = mysql.createPool({
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0,
-  connectTimeout: 10000, // 10 seconds
+  connectTimeout: 30000, // Increased to 30 seconds for Railway
   enableKeepAlive: true,
   keepAliveInitialDelay: 0,
+  ssl: {
+    rejectUnauthorized: false // Accept self-signed certificates from Railway
+  }
 });
 
 // Test connection on startup (non-blocking)
