@@ -58,96 +58,285 @@ export async function getStats() {
     const totalInventory = Object.values(INVENTORY_LEVELS).reduce((sum, val) => sum + val, 0);
     console.log('📦 Total inventory capacity:', totalInventory);
 
-    // Calculate aggregate view (overall availability percentage across all equipment)
-    const aggregateData: any = Array.from({ length: 24 }, (_, hour) => ({
-      hour,
-      count: 0,
+    console.log('🔄 Processing borrowing patterns...');
+    
+    // HOUR VIEW: Last 24 hours
+    console.log('⏰ Calculating hourly patterns (last 24 hours)...');
+    const hourlyData: any = {};
+    const aggregateHourly: any = Array.from({ length: 24 }, (_, hour) => ({
+      period: hour,
+      borrowed: 0,
+      returned: 0,
       totalBorrowed: 0,
       totalCapacity: totalInventory,
       availabilityPercent: 100,
     }));
 
-    console.log('🔄 Processing', equipmentList.length, 'equipment types...');
     for (const equipment of equipmentList) {
-      // Calculate borrowed count at each hour by tracking borrows and returns
-      const fullDayData = Array.from({ length: 24 }, (_, hour) => ({
-        hour,
-        count: 0,
+      const hourData = Array.from({ length: 24 }, (_, hour) => ({
+        period: hour,
+        borrowed: 0,
+        returned: 0,
       }));
 
-      // Get all transactions for this equipment from the last 2 days
-      // (handles timezone differences - server may be behind IST by a day)
-      const [transactions]: any = await connection.query(`
+      // Get hourly borrow/return counts
+      const [hourlyTxns]: any = await connection.query(`
         SELECT 
-          HOUR(outTime) as outHour,
-          outNum,
-          HOUR(inTime) as inHour,
-          inNum,
-          status,
-          DATE(outTime) as txnDate
+          HOUR(outTime) as hour,
+          COALESCE(SUM(outNum), 0) as borrowed
         FROM sports 
         WHERE LOWER(equipment) = LOWER(?) 
-          AND DATE(outTime) >= DATE_SUB(CURDATE(), INTERVAL 1 DAY)
-        ORDER BY outTime, inTime
+          AND outTime >= DATE_SUB(NOW(), INTERVAL 24 HOUR)
+        GROUP BY HOUR(outTime)
       `, [equipment]);
 
-      // Also get currently pending items from before the 2-day window
-      const [previousPending]: any = await connection.query(`
+      const [hourlyReturns]: any = await connection.query(`
         SELECT 
-          COALESCE(SUM(outNum), 0) as totalBorrowed
+          HOUR(inTime) as hour,
+          COALESCE(SUM(inNum), 0) as returned
         FROM sports 
         WHERE LOWER(equipment) = LOWER(?) 
-          AND status = 'PENDING'
-          AND DATE(outTime) < DATE_SUB(CURDATE(), INTERVAL 1 DAY)
+          AND inTime >= DATE_SUB(NOW(), INTERVAL 24 HOUR)
+        GROUP BY HOUR(inTime)
       `, [equipment]);
 
-      const startingBorrowed = Number(previousPending[0]?.totalBorrowed) || 0;
+      hourlyTxns.forEach((txn: any) => {
+        const hour = Number(txn.hour);
+        hourData[hour].borrowed = Number(txn.borrowed) || 0;
+      });
 
-      // Calculate net borrowed at each hour
-      for (let hour = 0; hour < 24; hour++) {
-        let netBorrowed = startingBorrowed;
+      hourlyReturns.forEach((txn: any) => {
+        const hour = Number(txn.hour);
+        hourData[hour].returned = Number(txn.returned) || 0;
+      });
 
-        transactions.forEach((txn: any) => {
-          const outHour = txn.outHour !== null ? Number(txn.outHour) : null;
-          const inHour = txn.inHour !== null ? Number(txn.inHour) : null;
-          const outNum = Number(txn.outNum) || 0;
-          const inNum = Number(txn.inNum) || 0;
+      hourlyData[equipment] = hourData;
 
-          // Add borrows that happened at or before this hour
-          if (outHour !== null && outHour <= hour) {
-            netBorrowed += outNum;
-          }
-
-          // Subtract returns that happened at or before this hour
-          if (inHour !== null && inHour <= hour) {
-            netBorrowed -= inNum;
-          }
-        });
-
-        fullDayData[hour].count = Math.max(0, netBorrowed);
-        
-        // Add to aggregate view (sum of all equipment borrowed at this hour)
-        aggregateData[hour].totalBorrowed += Math.max(0, netBorrowed);
-      }
-
-      peakBorrowingTimes[equipment] = fullDayData;
+      // Aggregate
+      hourData.forEach((data, hour) => {
+        aggregateHourly[hour].borrowed += data.borrowed;
+        aggregateHourly[hour].returned += data.returned;
+      });
     }
-    
-    // Convert aggregate to percentage-based for availability ratio
-    aggregateData.forEach((hourData: any) => {
-      const borrowed = hourData.totalBorrowed;
-      const available = totalInventory - borrowed;
-      const availabilityPercent = (available / totalInventory) * 100;
-      
-      // Store as "usage percent" for color coding (inverse of availability)
-      hourData.count = borrowed; // Keep borrowed count for display
-      hourData.availabilityPercent = availabilityPercent;
-      hourData.totalInventory = totalInventory; // Add total inventory for calculation
-    });
-    
-    // Add aggregate view
-    peakBorrowingTimes['aggregate'] = aggregateData;
-    console.log('✅ Peak borrowing times calculated');
+
+    hourlyData['aggregate'] = aggregateHourly.map((d: any) => ({
+      ...d,
+      totalBorrowed: d.borrowed,
+      availabilityPercent: ((totalInventory - d.borrowed) / totalInventory) * 100,
+      totalInventory,
+    }));
+
+    // DAY VIEW: Last 7 days
+    console.log('📅 Calculating daily patterns (last 7 days)...');
+    const dailyData: any = {};
+    const aggregateDaily: any = Array.from({ length: 7 }, (_, day) => ({
+      period: day,
+      borrowed: 0,
+      returned: 0,
+      totalBorrowed: 0,
+      totalCapacity: totalInventory,
+      availabilityPercent: 100,
+    }));
+
+    for (const equipment of equipmentList) {
+      const dayData = Array.from({ length: 7 }, (_, day) => ({
+        period: day,
+        borrowed: 0,
+        returned: 0,
+      }));
+
+      const [dailyTxns]: any = await connection.query(`
+        SELECT 
+          DATEDIFF(CURDATE(), DATE(outTime)) as daysAgo,
+          COALESCE(SUM(outNum), 0) as borrowed
+        FROM sports 
+        WHERE LOWER(equipment) = LOWER(?) 
+          AND outTime >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)
+        GROUP BY DATE(outTime)
+      `, [equipment]);
+
+      const [dailyReturns]: any = await connection.query(`
+        SELECT 
+          DATEDIFF(CURDATE(), DATE(inTime)) as daysAgo,
+          COALESCE(SUM(inNum), 0) as returned
+        FROM sports 
+        WHERE LOWER(equipment) = LOWER(?) 
+          AND inTime >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)
+        GROUP BY DATE(inTime)
+      `, [equipment]);
+
+      dailyTxns.forEach((txn: any) => {
+        const daysAgo = Number(txn.daysAgo);
+        if (daysAgo >= 0 && daysAgo < 7) {
+          dayData[6 - daysAgo].borrowed = Number(txn.borrowed) || 0;
+        }
+      });
+
+      dailyReturns.forEach((txn: any) => {
+        const daysAgo = Number(txn.daysAgo);
+        if (daysAgo >= 0 && daysAgo < 7) {
+          dayData[6 - daysAgo].returned = Number(txn.returned) || 0;
+        }
+      });
+
+      dailyData[equipment] = dayData;
+
+      dayData.forEach((data, day) => {
+        aggregateDaily[day].borrowed += data.borrowed;
+        aggregateDaily[day].returned += data.returned;
+      });
+    }
+
+    dailyData['aggregate'] = aggregateDaily.map((d: any) => ({
+      ...d,
+      totalBorrowed: d.borrowed,
+      availabilityPercent: ((totalInventory - d.borrowed) / totalInventory) * 100,
+      totalInventory,
+    }));
+
+    // WEEK VIEW: Last 4 weeks
+    console.log('🗓️ Calculating weekly patterns (last 4 weeks)...');
+    const weeklyData: any = {};
+    const aggregateWeekly: any = Array.from({ length: 4 }, (_, week) => ({
+      period: week,
+      borrowed: 0,
+      returned: 0,
+      totalBorrowed: 0,
+      totalCapacity: totalInventory,
+      availabilityPercent: 100,
+    }));
+
+    for (const equipment of equipmentList) {
+      const weekData = Array.from({ length: 4 }, (_, week) => ({
+        period: week,
+        borrowed: 0,
+        returned: 0,
+      }));
+
+      const [weeklyTxns]: any = await connection.query(`
+        SELECT 
+          FLOOR(DATEDIFF(CURDATE(), DATE(outTime)) / 7) as weeksAgo,
+          COALESCE(SUM(outNum), 0) as borrowed
+        FROM sports 
+        WHERE LOWER(equipment) = LOWER(?) 
+          AND outTime >= DATE_SUB(CURDATE(), INTERVAL 28 DAY)
+        GROUP BY FLOOR(DATEDIFF(CURDATE(), DATE(outTime)) / 7)
+      `, [equipment]);
+
+      const [weeklyReturns]: any = await connection.query(`
+        SELECT 
+          FLOOR(DATEDIFF(CURDATE(), DATE(inTime)) / 7) as weeksAgo,
+          COALESCE(SUM(inNum), 0) as returned
+        FROM sports 
+        WHERE LOWER(equipment) = LOWER(?) 
+          AND inTime >= DATE_SUB(CURDATE(), INTERVAL 28 DAY)
+        GROUP BY FLOOR(DATEDIFF(CURDATE(), DATE(inTime)) / 7)
+      `, [equipment]);
+
+      weeklyTxns.forEach((txn: any) => {
+        const weeksAgo = Number(txn.weeksAgo);
+        if (weeksAgo >= 0 && weeksAgo < 4) {
+          weekData[3 - weeksAgo].borrowed = Number(txn.borrowed) || 0;
+        }
+      });
+
+      weeklyReturns.forEach((txn: any) => {
+        const weeksAgo = Number(txn.weeksAgo);
+        if (weeksAgo >= 0 && weeksAgo < 4) {
+          weekData[3 - weeksAgo].returned = Number(txn.returned) || 0;
+        }
+      });
+
+      weeklyData[equipment] = weekData;
+
+      weekData.forEach((data, week) => {
+        aggregateWeekly[week].borrowed += data.borrowed;
+        aggregateWeekly[week].returned += data.returned;
+      });
+    }
+
+    weeklyData['aggregate'] = aggregateWeekly.map((d: any) => ({
+      ...d,
+      totalBorrowed: d.borrowed,
+      availabilityPercent: ((totalInventory - d.borrowed) / totalInventory) * 100,
+      totalInventory,
+    }));
+
+    // MONTH VIEW: Last 12 months
+    console.log('📆 Calculating monthly patterns (last 12 months)...');
+    const monthlyData: any = {};
+    const aggregateMonthly: any = Array.from({ length: 12 }, (_, month) => ({
+      period: month,
+      borrowed: 0,
+      returned: 0,
+      totalBorrowed: 0,
+      totalCapacity: totalInventory,
+      availabilityPercent: 100,
+    }));
+
+    for (const equipment of equipmentList) {
+      const monthData = Array.from({ length: 12 }, (_, month) => ({
+        period: month,
+        borrowed: 0,
+        returned: 0,
+      }));
+
+      const [monthlyTxns]: any = await connection.query(`
+        SELECT 
+          PERIOD_DIFF(DATE_FORMAT(CURDATE(), '%Y%m'), DATE_FORMAT(outTime, '%Y%m')) as monthsAgo,
+          COALESCE(SUM(outNum), 0) as borrowed
+        FROM sports 
+        WHERE LOWER(equipment) = LOWER(?) 
+          AND outTime >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH)
+        GROUP BY DATE_FORMAT(outTime, '%Y%m')
+      `, [equipment]);
+
+      const [monthlyReturns]: any = await connection.query(`
+        SELECT 
+          PERIOD_DIFF(DATE_FORMAT(CURDATE(), '%Y%m'), DATE_FORMAT(inTime, '%Y%m')) as monthsAgo,
+          COALESCE(SUM(inNum), 0) as returned
+        FROM sports 
+        WHERE LOWER(equipment) = LOWER(?) 
+          AND inTime >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH)
+        GROUP BY DATE_FORMAT(inTime, '%Y%m')
+      `, [equipment]);
+
+      monthlyTxns.forEach((txn: any) => {
+        const monthsAgo = Number(txn.monthsAgo);
+        if (monthsAgo >= 0 && monthsAgo < 12) {
+          monthData[11 - monthsAgo].borrowed = Number(txn.borrowed) || 0;
+        }
+      });
+
+      monthlyReturns.forEach((txn: any) => {
+        const monthsAgo = Number(txn.monthsAgo);
+        if (monthsAgo >= 0 && monthsAgo < 12) {
+          monthData[11 - monthsAgo].returned = Number(txn.returned) || 0;
+        }
+      });
+
+      monthlyData[equipment] = monthData;
+
+      monthData.forEach((data, month) => {
+        aggregateMonthly[month].borrowed += data.borrowed;
+        aggregateMonthly[month].returned += data.returned;
+      });
+    }
+
+    monthlyData['aggregate'] = aggregateMonthly.map((d: any) => ({
+      ...d,
+      totalBorrowed: d.borrowed,
+      availabilityPercent: ((totalInventory - d.borrowed) / totalInventory) * 100,
+      totalInventory,
+    }));
+
+    // Package all time periods
+    peakBorrowingTimes.hourly = hourlyData;
+    peakBorrowingTimes.daily = dailyData;
+    peakBorrowingTimes.weekly = weeklyData;
+    peakBorrowingTimes.monthly = monthlyData;
+
+    console.log('✅ Peak borrowing times calculated for all periods');
 
     console.log('📊 Fetching most borrowed equipment...');
     const [mostBorrowed]: any = await connection.query(`
