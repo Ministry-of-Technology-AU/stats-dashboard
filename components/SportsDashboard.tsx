@@ -302,8 +302,8 @@ export default function SportsDashboard({ data: initialData }: { data: any }) {
                     </div>
                   </div>
                   <ResponsiveContainer width="100%" height={320}>
-                    <LineChart data={peakTimesData[peakTimeView]} margin={{ top: 5, right: 20, bottom: 60, left: 20 }}>
-                      <CartesianGrid strokeDasharray="3 3" />
+                    <BarChart data={peakTimesData[peakTimeView]} margin={{ top: 5, right: 20, bottom: 60, left: 20 }}>
+                      <CartesianGrid strokeDasharray="3 3" className="stroke-gray-200 dark:stroke-gray-700" />
                       <XAxis 
                         dataKey="time" 
                         angle={-45} 
@@ -316,40 +316,26 @@ export default function SportsDashboard({ data: initialData }: { data: any }) {
                         tick={{ fontSize: 11 }}
                       />
                       <Tooltip content={<CustomTooltip />} />
-                      <Line
-                        type="monotone"
+                      <Bar
                         dataKey="count"
-                        stroke="url(#colorGradient)"
-                        strokeWidth={3}
-                        name="Borrowings"
-                        dot={(props: any) => {
-                          const { cx, cy, payload, index } = props;
+                        name="Available"
+                        radius={[4, 4, 0, 0]}
+                        shape={(props: any) => {
+                          const { x, y, width, height, payload } = props;
                           return (
-                            <circle
-                              key={`dot-${index}-${payload.hour}`}
-                              cx={cx}
-                              cy={cy}
-                              r={5}
+                            <rect
+                              x={x}
+                              y={y}
+                              width={width}
+                              height={height}
                               fill={payload.color}
-                              stroke={payload.color}
-                              strokeWidth={2}
+                              rx={4}
+                              ry={4}
                             />
                           );
                         }}
-                        activeDot={{ r: 7 }}
                       />
-                      <defs>
-                        <linearGradient id="colorGradient" x1="0" y1="0" x2="1" y2="0">
-                          {peakTimesData[peakTimeView].map((item: any, index: number) => {
-                            const dataLength = peakTimesData[peakTimeView].length;
-                            const position = dataLength > 1 ? index / (dataLength - 1) : 0;
-                            return (
-                              <stop key={index} offset={position} stopColor={item.color} />
-                            );
-                          })}
-                        </linearGradient>
-                      </defs>
-                    </LineChart>
+                    </BarChart>
                   </ResponsiveContainer>
                 </>
               ) : (
