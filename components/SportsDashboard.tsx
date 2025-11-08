@@ -387,35 +387,36 @@ export default function SportsDashboard({ data: initialData }: { data: any }) {
                         }}
                       />
                       <Tooltip content={<CustomTooltip />} />
-                      {/* Draw a line segment for each status change */}
+                      {/* Render colored line segments */}
                       {peakTimesData[peakTimeView].map((dataPoint: any, index: number) => {
                         if (index === peakTimesData[peakTimeView].length - 1) return null;
                         
-                        const nextPoint = peakTimesData[peakTimeView][index + 1];
-                        const segmentData = [dataPoint, nextPoint];
+                        const currentData = peakTimesData[peakTimeView].slice(index, index + 2);
                         
                         return (
                           <Line
                             key={`segment-${index}`}
-                            data={segmentData}
+                            data={currentData}
                             type="monotone"
                             dataKey="borrowed"
                             stroke={dataPoint.color}
-                            strokeWidth={3}
+                            strokeWidth={2.5}
                             dot={false}
                             activeDot={false}
                             isAnimationActive={false}
                           />
                         );
                       })}
-                      {/* Add dots on top */}
+                      {/* Render dots on top */}
                       <Line
                         type="monotone"
                         dataKey="borrowed"
                         stroke="transparent"
                         strokeWidth={0}
+                        connectNulls={false}
                         dot={(props: any) => {
                           const { cx, cy, payload } = props;
+                          if (!cx || !cy) return <></>;
                           return (
                             <circle
                               cx={cx}
@@ -425,7 +426,7 @@ export default function SportsDashboard({ data: initialData }: { data: any }) {
                             />
                           );
                         }}
-                        activeDot={{ r: 7, strokeWidth: 0, fill: '#3b82f6' }}
+                        activeDot={{ r: 7, fill: '#3b82f6' }}
                       />
                     </LineChart>
                   </ResponsiveContainer>
