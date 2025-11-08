@@ -216,7 +216,7 @@ export async function getStats() {
         aggregateHourData[hour].totalBorrowed += Math.max(0, netBorrowed);
       }
 
-      // Calculate daily data (by day of week)
+      // Calculate daily data (by day of week - Sunday=1, Saturday=7 in MySQL DAYOFWEEK)
       for (let day = 1; day <= 7; day++) {
         let avgBorrowed = 0;
         const dayTransactions = dailyTransactions.filter((txn: any) => 
@@ -230,8 +230,12 @@ export async function getStats() {
           avgBorrowed = Math.round(totalBorrowed / dayTransactions.length);
         }
         
+        // MySQL DAYOFWEEK: 1=Sunday, 2=Monday, ..., 7=Saturday
+        // Array index: 0=Sunday, 1=Monday, ..., 6=Saturday
         dayData[day - 1].count = avgBorrowed;
+        dayData[day - 1].day = day; // Store the actual day number (1-7)
         aggregateDayData[day - 1].totalBorrowed += avgBorrowed;
+        aggregateDayData[day - 1].day = day;
       }
 
       // Calculate weekly data (last 4 weeks with actual date ranges)

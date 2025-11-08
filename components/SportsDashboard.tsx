@@ -96,8 +96,10 @@ export default function SportsDashboard({ data: initialData }: { data: any }) {
           const hour = Number(d.hour);
           timeLabel = `${hour === 0 ? 12 : hour > 12 ? hour - 12 : hour}${hour >= 12 ? 'PM' : 'AM'}`;
         } else if (timeRange === 'day') {
+          // MySQL DAYOFWEEK: 1=Sunday, 2=Monday, 3=Tuesday, 4=Wednesday, 5=Thursday, 6=Friday, 7=Saturday
           const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-          timeLabel = dayNames[d.day - 1] || `Day ${d.day}`;
+          const dayIndex = (d.day - 1) % 7; // Convert 1-7 to 0-6
+          timeLabel = dayNames[dayIndex];
         } else if (timeRange === 'week') {
           // Use actual date range for week labels
           if (d.weekStart && d.weekEnd) {
@@ -162,8 +164,10 @@ export default function SportsDashboard({ data: initialData }: { data: any }) {
         const hour = Number(d.hour);
         timeLabel = `${hour === 0 ? 12 : hour > 12 ? hour - 12 : hour}${hour >= 12 ? 'PM' : 'AM'}`;
       } else if (timeRange === 'day') {
+        // MySQL DAYOFWEEK: 1=Sunday, 2=Monday, 3=Tuesday, 4=Wednesday, 5=Thursday, 6=Friday, 7=Saturday
         const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-        timeLabel = dayNames[d.day - 1] || `Day ${d.day}`;
+        const dayIndex = (d.day - 1) % 7; // Convert 1-7 to 0-6
+        timeLabel = dayNames[dayIndex];
       } else if (timeRange === 'week') {
         // Use actual date range for week labels
         if (d.weekStart && d.weekEnd) {
