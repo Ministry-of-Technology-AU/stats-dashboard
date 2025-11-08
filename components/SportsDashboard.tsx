@@ -102,9 +102,12 @@ export default function SportsDashboard({ data: initialData }: { data: any }) {
           timeLabel = `Week ${4 - d.week}`;
         } else if (timeRange === 'month') {
           const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-          const currentMonth = new Date().getMonth();
-          const monthIndex = (currentMonth - (11 - d.month) + 12) % 12;
-          timeLabel = monthNames[monthIndex];
+          // d.month is the index in our 12-month array (0-11), where 0 is 12 months ago
+          const currentMonth = new Date().getMonth(); // 0-11
+          const monthsAgo = 11 - d.month;
+          let targetMonth = currentMonth - monthsAgo;
+          if (targetMonth < 0) targetMonth += 12;
+          timeLabel = monthNames[targetMonth];
         }
         
         // Determine health status
@@ -149,9 +152,12 @@ export default function SportsDashboard({ data: initialData }: { data: any }) {
         timeLabel = `Week ${4 - d.week}`;
       } else if (timeRange === 'month') {
         const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-        const currentMonth = new Date().getMonth();
-        const monthIndex = (currentMonth - (11 - d.month) + 12) % 12;
-        timeLabel = monthNames[monthIndex];
+        // d.month is the index in our 12-month array (0-11), where 0 is 12 months ago
+        const currentMonth = new Date().getMonth(); // 0-11
+        const monthsAgo = 11 - d.month;
+        let targetMonth = currentMonth - monthsAgo;
+        if (targetMonth < 0) targetMonth += 12;
+        timeLabel = monthNames[targetMonth];
       }
       
       // Determine health status
@@ -416,12 +422,10 @@ export default function SportsDashboard({ data: initialData }: { data: any }) {
                               cy={cy}
                               r={5}
                               fill={payload.color}
-                              stroke="#fff"
-                              strokeWidth={2}
                             />
                           );
                         }}
-                        activeDot={{ r: 7, strokeWidth: 2 }}
+                        activeDot={{ r: 7, strokeWidth: 0, fill: '#3b82f6' }}
                       />
                     </LineChart>
                   </ResponsiveContainer>

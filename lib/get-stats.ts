@@ -162,10 +162,11 @@ export async function getStats() {
         ORDER BY outTime
       `, [equipment]);
 
-      // Get monthly transactions (last 12 months)
+      // Get monthly transactions (last 12 months with year)
       const [monthlyTransactions]: any = await connection.query(`
         SELECT 
           MONTH(outTime) as monthNum,
+          YEAR(outTime) as yearNum,
           outNum,
           MONTH(inTime) as returnMonthNum,
           inNum,
@@ -256,13 +257,22 @@ export async function getStats() {
       }
 
       // Calculate monthly data (last 12 months)
-      const currentMonth = new Date().getMonth() + 1;
+      const now = new Date();
+      const currentYear = now.getFullYear();
+      const currentMonth = now.getMonth() + 1; // 1-12
+      
       for (let i = 0; i < 12; i++) {
+        // Calculate target month and year going backwards from current
+        let targetYear = currentYear;
         let targetMonth = currentMonth - i;
-        if (targetMonth <= 0) targetMonth += 12;
+        
+        if (targetMonth <= 0) {
+          targetMonth += 12;
+          targetYear -= 1;
+        }
         
         const monthTransactions = monthlyTransactions.filter((txn: any) => 
-          txn.monthNum === targetMonth
+          txn.monthNum === targetMonth && txn.yearNum === targetYear
         );
         
         let avgBorrowed = 0;
@@ -270,11 +280,12 @@ export async function getStats() {
           const totalBorrowed = monthTransactions.reduce((sum: number, txn: any) => 
             sum + (Number(txn.outNum) || 0), 0
           );
-          const daysInMonth = new Date(new Date().getFullYear(), targetMonth, 0).getDate();
+          const daysInMonth = new Date(targetYear, targetMonth, 0).getDate();
           avgBorrowed = Math.round(totalBorrowed / daysInMonth); // Daily average
         }
         
         monthData[11 - i].count = avgBorrowed;
+        monthData[11 - i].month = 11 - i; // Store the index for proper ordering
         aggregateMonthData[11 - i].totalBorrowed += avgBorrowed;
       }
 
