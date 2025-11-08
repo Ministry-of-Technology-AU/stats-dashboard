@@ -238,12 +238,17 @@ export async function getStats() {
       const nowForWeek = new Date();
       
       for (let i = 0; i < 4; i++) {
-        // Calculate the start of each week going backwards
+        // Calculate the start of each week going backwards (Sunday as first day)
         const weeksAgo = i;
         const weekStart = new Date(nowForWeek);
-        weekStart.setDate(weekStart.getDate() - (weeksAgo * 7) - weekStart.getDay()); // Start of week (Sunday)
+        // Go back to the start of the week (Sunday)
+        const daysToSunday = weekStart.getDay(); // 0 = Sunday, 1 = Monday, etc.
+        weekStart.setDate(weekStart.getDate() - daysToSunday - (weeksAgo * 7));
+        weekStart.setHours(0, 0, 0, 0); // Start of day
+        
         const weekEnd = new Date(weekStart);
         weekEnd.setDate(weekEnd.getDate() + 6); // End of week (Saturday)
+        weekEnd.setHours(23, 59, 59, 999); // End of day
         
         const weekTransactions = weeklyTransactions.filter((txn: any) => {
           const txnDate = new Date(txn.outTime);
