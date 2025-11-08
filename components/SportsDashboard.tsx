@@ -9,6 +9,7 @@ import { useDashboard } from '@/components/DashboardWrapper';
 
 export default function SportsDashboard({ data: initialData }: { data: any }) {
   const [peakTimeView, setPeakTimeView] = useState('aggregate');
+  const [timeRangeView, setTimeRangeView] = useState('hour'); // hour, day, week, month
   const [data, setData] = useState(initialData);
   const { setRefreshCallback, setIsRefreshing, setLastUpdate } = useDashboard();
 
@@ -102,11 +103,27 @@ export default function SportsDashboard({ data: initialData }: { data: any }) {
         const hour = Number(d.hour);
         const borrowed = Number(d.count) || 0;
         const availabilityPercent = Number(d.availabilityPercent) || 100;
+        const totalInventory = Number(d.totalInventory) || 119;
+        const available = totalInventory - borrowed;
+        
+        // Determine health status
+        let status = 'Healthy';
+        let statusColor = '#22c55e';
+        if (availabilityPercent < 30) {
+          status = 'Critical';
+          statusColor = '#ef4444';
+        } else if (availabilityPercent < 75) {
+          status = 'Moderate';
+          statusColor = '#eab308';
+        }
+        
         return {
-          time: `${hour === 0 ? 12 : hour > 12 ? hour - 12 : hour}:00 ${hour >= 12 ? 'PM' : 'AM'}`,
-          count: borrowed,  // Show borrowed count (flows upward)
-          availabilityPercent,
-          color: getColorForAvailability(availabilityPercent),
+          time: `${hour === 0 ? 12 : hour > 12 ? hour - 12 : hour}${hour >= 12 ? 'PM' : 'AM'}`,
+          borrowed,
+          available,
+          availabilityPercent: availabilityPercent.toFixed(1),
+          status,
+          color: statusColor,
           hour,
         };
       });
@@ -116,10 +133,28 @@ export default function SportsDashboard({ data: initialData }: { data: any }) {
     return hourlyData.map((d: any) => {
       const hour = Number(d.hour);
       const borrowed = Number(d.count) || 0;
+      const inventoryLevel = INVENTORY_LEVELS[equipment] || 10;
+      const available = inventoryLevel - borrowed;
+      const availabilityPercent = (available / inventoryLevel) * 100;
+      
+      // Determine health status
+      let status = 'Healthy';
+      let statusColor = '#22c55e';
+      if (availabilityPercent < 30) {
+        status = 'Critical';
+        statusColor = '#ef4444';
+      } else if (availabilityPercent < 75) {
+        status = 'Moderate';
+        statusColor = '#eab308';
+      }
+      
       return {
-        time: `${hour === 0 ? 12 : hour > 12 ? hour - 12 : hour}:00 ${hour >= 12 ? 'PM' : 'AM'}`,
-        count: borrowed,  // Show borrowed count (flows upward)
-        color: getColorForUsage(borrowed, equipment),
+        time: `${hour === 0 ? 12 : hour > 12 ? hour - 12 : hour}${hour >= 12 ? 'PM' : 'AM'}`,
+        borrowed,
+        available,
+        availabilityPercent: availabilityPercent.toFixed(1),
+        status,
+        color: statusColor,
         hour,
       };
     });
@@ -155,44 +190,26 @@ export default function SportsDashboard({ data: initialData }: { data: any }) {
     if (active && payload && payload.length) {
       const dataPoint = payload[0].payload;
       
-      // Special handling for aggregate view
-      if (peakTimeView === 'aggregate') {
-        const availabilityPercent = Number(dataPoint.availabilityPercent || 100).toFixed(1);
-        let status = 'Healthy';
-        if (Number(availabilityPercent) < 30) status = 'Critical';
-        else if (Number(availabilityPercent) < 75) status = 'Moderate';
-
-        return (
-          <div className="bg-white dark:bg-gray-800 p-3 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700">
-            <p className="font-semibold text-gray-900 dark:text-white">{dataPoint.time}</p>
-            <p className="text-sm text-gray-600 dark:text-gray-400">Borrowed: {dataPoint.count} items</p>
-            <p className="text-sm text-gray-600 dark:text-gray-400">Overall Availability: {availabilityPercent}%</p>
-            <p className="text-sm font-semibold" style={{ color: dataPoint.color }}>
-              {status}
-            </p>
-          </div>
-        );
-      }
-      
-      // Regular equipment view
-      const inventoryLevel = INVENTORY_LEVELS[peakTimeView] || 10;
-      const borrowed = dataPoint.count;
-      const available = inventoryLevel - borrowed;
-      const availablePercent = ((available / inventoryLevel) * 100).toFixed(0);
-      
-      let status = 'Healthy';
-      if (Number(availablePercent) < 30) status = 'Critical';
-      else if (Number(availablePercent) < 75) status = 'Moderate';
-
       return (
         <div className="bg-white dark:bg-gray-800 p-3 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700">
-          <p className="font-semibold text-gray-900 dark:text-white">{dataPoint.time}</p>
-          <p className="text-sm text-gray-600 dark:text-gray-400">Borrowed: {borrowed}</p>
-          <p className="text-sm text-gray-600 dark:text-gray-400">Available: {available}</p>
-          <p className="text-sm text-gray-600 dark:text-gray-400">Availability: {availablePercent}%</p>
-          <p className="text-sm font-semibold" style={{ color: dataPoint.color }}>
-            {status}
-          </p>
+          <p className="font-semibold text-gray-900 dark:text-white mb-2">{dataPoint.time}</p>
+          <div className="space-y-1">
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              Borrowed: <span className="font-semibold text-gray-900 dark:text-white">{dataPoint.borrowed}</span>
+            </p>
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              Available: <span className="font-semibold text-gray-900 dark:text-white">{dataPoint.available}</span>
+            </p>
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              Availability: <span className="font-semibold text-gray-900 dark:text-white">{dataPoint.availabilityPercent}%</span>
+            </p>
+            <div className="pt-1 mt-1 border-t border-gray-200 dark:border-gray-600">
+              <p className="text-sm font-semibold flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full" style={{ backgroundColor: dataPoint.color }}></span>
+                <span style={{ color: dataPoint.color }}>{dataPoint.status}</span>
+              </p>
+            </div>
+          </div>
         </div>
       );
     }
@@ -259,14 +276,26 @@ export default function SportsDashboard({ data: initialData }: { data: any }) {
         {/* Peak Borrowing Times */}
         <Card>
           <CardHeader>
-            <CardTitle>Peak Borrowing Times</CardTitle>
-            <CardDescription>Hourly borrowing patterns across equipment</CardDescription>
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <div>
+                <CardTitle>Peak Borrowing Times</CardTitle>
+                <CardDescription>Monitor equipment usage patterns and availability</CardDescription>
+              </div>
+              <Tabs value={timeRangeView} onValueChange={setTimeRangeView} className="w-auto">
+                <TabsList>
+                  <TabsTrigger value="hour">Hour</TabsTrigger>
+                  <TabsTrigger value="day">Day</TabsTrigger>
+                  <TabsTrigger value="week">Week</TabsTrigger>
+                  <TabsTrigger value="month">Month</TabsTrigger>
+                </TabsList>
+              </Tabs>
+            </div>
           </CardHeader>
           <CardContent>
             <Tabs defaultValue="aggregate" onValueChange={setPeakTimeView}>
               <TabsList className="mb-4 flex-wrap h-auto">
                 {allEquipment.map((eq) => (
-                  <TabsTrigger key={eq} value={eq} className="capitalize">
+                  <TabsTrigger key={eq} value={eq} className="capitalize text-xs">
                     {eq === 'aggregate' ? 'All Equipment' : eq}
                   </TabsTrigger>
                 ))}
@@ -274,64 +303,85 @@ export default function SportsDashboard({ data: initialData }: { data: any }) {
 
               {peakTimesData[peakTimeView]?.length > 0 ? (
                 <>
-                  <div className="mb-4 flex flex-wrap items-center gap-4 text-sm">
-                    <div className="flex items-center gap-2">
-                      <div className="w-4 h-4 rounded-full bg-green-500"></div>
-                      <span className="text-gray-600 dark:text-gray-400">Healthy (75%+ available)</span>
+                  <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                    <div className="flex flex-wrap items-center gap-4 text-xs">
+                      <div className="flex items-center gap-1.5">
+                        <div className="w-3 h-3 rounded-full bg-green-500"></div>
+                        <span className="text-gray-600 dark:text-gray-400">Healthy (≥75%)</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
+                        <span className="text-gray-600 dark:text-gray-400">Moderate (30-75%)</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <div className="w-3 h-3 rounded-full bg-red-500"></div>
+                        <span className="text-gray-600 dark:text-gray-400">Critical (&lt;30%)</span>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <div className="w-4 h-4 rounded-full bg-yellow-500"></div>
-                      <span className="text-gray-600 dark:text-gray-400">Moderate (30-75% available)</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className="w-4 h-4 rounded-full bg-red-500"></div>
-                      <span className="text-gray-600 dark:text-gray-400">Critical (&lt;30% available)</span>
-                    </div>
+                    {peakTimesData[peakTimeView][0] && (
+                      <div className="text-xs text-gray-500 dark:text-gray-400">
+                        Current: <span className="font-semibold" style={{ color: peakTimesData[peakTimeView][0].color }}>
+                          {peakTimesData[peakTimeView][0].status}
+                        </span> • {peakTimesData[peakTimeView][0].availabilityPercent}% available
+                      </div>
+                    )}
                   </div>
-                  <ResponsiveContainer width="100%" height={300}>
-                    <LineChart data={peakTimesData[peakTimeView]}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="time" angle={-45} textAnchor="end" height={80} />
-                      <YAxis label={{ value: 'Borrowed Count', angle: -90, position: 'insideLeft' }} />
+                  <ResponsiveContainer width="100%" height={320}>
+                    <LineChart data={peakTimesData[peakTimeView]} margin={{ top: 5, right: 10, bottom: 5, left: 0 }}>
+                      <defs>
+                        <linearGradient id="borrowedGradient" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.8}/>
+                          <stop offset="95%" stopColor="#3b82f6" stopOpacity={0.1}/>
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" className="dark:stroke-gray-700" />
+                      <XAxis 
+                        dataKey="time" 
+                        tick={{ fontSize: 11, fill: '#6b7280' }}
+                        stroke="#9ca3af"
+                      />
+                      <YAxis 
+                        tick={{ fontSize: 11, fill: '#6b7280' }}
+                        stroke="#9ca3af"
+                        label={{ 
+                          value: 'Borrowed', 
+                          angle: -90, 
+                          position: 'insideLeft',
+                          style: { fontSize: 12, fill: '#6b7280' }
+                        }}
+                      />
                       <Tooltip content={<CustomTooltip />} />
                       <Line
                         type="monotone"
-                        dataKey="count"
-                        stroke="url(#colorGradient)"
-                        strokeWidth={3}
-                        name="Borrowings"
+                        dataKey="borrowed"
+                        stroke="#3b82f6"
+                        strokeWidth={2.5}
+                        fill="url(#borrowedGradient)"
+                        fillOpacity={1}
                         dot={(props: any) => {
                           const { cx, cy, payload } = props;
                           return (
                             <circle
                               cx={cx}
                               cy={cy}
-                              r={5}
+                              r={4}
                               fill={payload.color}
-                              stroke={payload.color}
+                              stroke="#fff"
                               strokeWidth={2}
                             />
                           );
                         }}
-                        activeDot={{ r: 7 }}
+                        activeDot={{ r: 6, strokeWidth: 2 }}
                       />
-                      <defs>
-                        <linearGradient id="colorGradient" x1="0" y1="0" x2="1" y2="0">
-                          {peakTimesData[peakTimeView].map((item: any, index: number) => {
-                            const dataLength = peakTimesData[peakTimeView].length;
-                            const position = dataLength > 1 ? index / (dataLength - 1) : 0;
-                            return (
-                              <stop key={index} offset={position} stopColor={item.color} />
-                            );
-                          })}
-                        </linearGradient>
-                      </defs>
                     </LineChart>
                   </ResponsiveContainer>
                 </>
               ) : (
-                <div className="h-[300px] flex items-center justify-center text-gray-500 dark:text-gray-400">
-                  No borrowing data for this equipment
+                <div className="h-[320px] flex items-center justify-center text-gray-500 dark:text-gray-400">
+                  <div className="text-center">
+                    <p className="text-sm font-medium">No borrowing data available</p>
+                    <p className="text-xs mt-1">Data will appear once equipment is borrowed</p>
+                  </div>
                 </div>
               )}
             </Tabs>
@@ -417,26 +467,26 @@ export default function SportsDashboard({ data: initialData }: { data: any }) {
           </CardHeader>
           <CardContent>
             {data.runOutFrequency?.length > 0 ? (
-              <ResponsiveContainer width="100%" height={400}>
-                <BarChart data={data.runOutFrequency} margin={{ top: 20, right: 30, bottom: 100, left: 60 }}>
+              <ResponsiveContainer width="100%" height={320}>
+                <BarChart data={data.runOutFrequency} margin={{ top: 10, right: 20, bottom: 60, left: 10 }}>
                   <CartesianGrid strokeDasharray="3 3" className="stroke-gray-200 dark:stroke-gray-700" />
                   <XAxis 
                     dataKey="equipment" 
                     angle={-45} 
                     textAnchor="end" 
-                    height={100}
-                    tick={{ fontSize: 11 }}
+                    height={70}
+                    tick={{ fontSize: 10 }}
                     interval={0}
                   />
                   <YAxis 
-                    tick={{ fontSize: 11 }}
+                    tick={{ fontSize: 10 }}
                     label={{ 
-                      value: 'Days at 0% Availability', 
+                      value: 'Days', 
                       angle: -90, 
                       position: 'insideLeft',
                       style: { 
                         textAnchor: 'middle',
-                        fontSize: 12,
+                        fontSize: 11,
                         fill: 'var(--color-foreground)'
                       }
                     }} 
@@ -452,11 +502,6 @@ export default function SportsDashboard({ data: initialData }: { data: any }) {
                       color: 'var(--color-card-foreground)'
                     }}
                     formatter={(value: any) => [`${value} days`, 'Stock-Outs']}
-                  />
-                  <Legend 
-                    verticalAlign="top" 
-                    height={36}
-                    wrapperStyle={{ paddingBottom: '10px' }}
                   />
                   <Bar 
                     dataKey="runOutCount" 
