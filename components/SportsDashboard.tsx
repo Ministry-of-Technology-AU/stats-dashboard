@@ -99,7 +99,23 @@ export default function SportsDashboard({ data: initialData }: { data: any }) {
           const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
           timeLabel = dayNames[d.day - 1] || `Day ${d.day}`;
         } else if (timeRange === 'week') {
-          timeLabel = `Week ${4 - d.week}`;
+          // Use actual date range for week labels
+          if (d.weekStart && d.weekEnd) {
+            const start = new Date(d.weekStart);
+            const end = new Date(d.weekEnd);
+            const startDay = start.getDate();
+            const endDay = end.getDate();
+            const startMonth = start.toLocaleDateString('en-US', { month: 'short' });
+            const endMonth = end.toLocaleDateString('en-US', { month: 'short' });
+            
+            if (startMonth === endMonth) {
+              timeLabel = `${startDay}-${endDay} ${startMonth}`;
+            } else {
+              timeLabel = `${startDay} ${startMonth} - ${endDay} ${endMonth}`;
+            }
+          } else {
+            timeLabel = `Week ${4 - d.week}`;
+          }
         } else if (timeRange === 'month') {
           const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
           // d.month is the index in our 12-month array (0-11), where 0 is 12 months ago
@@ -149,7 +165,23 @@ export default function SportsDashboard({ data: initialData }: { data: any }) {
         const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
         timeLabel = dayNames[d.day - 1] || `Day ${d.day}`;
       } else if (timeRange === 'week') {
-        timeLabel = `Week ${4 - d.week}`;
+        // Use actual date range for week labels
+        if (d.weekStart && d.weekEnd) {
+          const start = new Date(d.weekStart);
+          const end = new Date(d.weekEnd);
+          const startDay = start.getDate();
+          const endDay = end.getDate();
+          const startMonth = start.toLocaleDateString('en-US', { month: 'short' });
+          const endMonth = end.toLocaleDateString('en-US', { month: 'short' });
+          
+          if (startMonth === endMonth) {
+            timeLabel = `${startDay}-${endDay} ${startMonth}`;
+          } else {
+            timeLabel = `${startDay} ${startMonth} - ${endDay} ${endMonth}`;
+          }
+        } else {
+          timeLabel = `Week ${4 - d.week}`;
+        }
       } else if (timeRange === 'month') {
         const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
         // d.month is the index in our 12-month array (0-11), where 0 is 12 months ago
@@ -355,21 +387,6 @@ export default function SportsDashboard({ data: initialData }: { data: any }) {
                   </div>
                   <ResponsiveContainer width="100%" height={320}>
                     <LineChart data={peakTimesData[peakTimeView]} margin={{ top: 5, right: 10, bottom: 5, left: 0 }}>
-                      <defs>
-                        {/* Create gradients for each health status */}
-                        <linearGradient id="healthyGradient" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#22c55e" stopOpacity={0.6}/>
-                          <stop offset="95%" stopColor="#22c55e" stopOpacity={0.05}/>
-                        </linearGradient>
-                        <linearGradient id="moderateGradient" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#eab308" stopOpacity={0.6}/>
-                          <stop offset="95%" stopColor="#eab308" stopOpacity={0.05}/>
-                        </linearGradient>
-                        <linearGradient id="criticalGradient" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#ef4444" stopOpacity={0.6}/>
-                          <stop offset="95%" stopColor="#ef4444" stopOpacity={0.05}/>
-                        </linearGradient>
-                      </defs>
                       <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" className="dark:stroke-gray-700" />
                       <XAxis 
                         dataKey="time" 
@@ -387,33 +404,12 @@ export default function SportsDashboard({ data: initialData }: { data: any }) {
                         }}
                       />
                       <Tooltip content={<CustomTooltip />} />
-                      {/* Render colored line segments */}
-                      {peakTimesData[peakTimeView].map((dataPoint: any, index: number) => {
-                        if (index === peakTimesData[peakTimeView].length - 1) return null;
-                        
-                        const currentData = peakTimesData[peakTimeView].slice(index, index + 2);
-                        
-                        return (
-                          <Line
-                            key={`segment-${index}`}
-                            data={currentData}
-                            type="monotone"
-                            dataKey="borrowed"
-                            stroke={dataPoint.color}
-                            strokeWidth={2.5}
-                            dot={false}
-                            activeDot={false}
-                            isAnimationActive={false}
-                          />
-                        );
-                      })}
-                      {/* Render dots on top */}
+                      {/* Single line with gray stroke and colored dots */}
                       <Line
                         type="monotone"
                         dataKey="borrowed"
-                        stroke="transparent"
-                        strokeWidth={0}
-                        connectNulls={false}
+                        stroke="#9ca3af"
+                        strokeWidth={2}
                         dot={(props: any) => {
                           const { cx, cy, payload } = props;
                           if (!cx || !cy) return <></>;

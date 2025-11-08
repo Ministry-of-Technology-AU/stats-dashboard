@@ -148,12 +148,12 @@ export async function getStats() {
         ORDER BY outTime
       `, [equipment]);
 
-      // Get weekly transactions (last 4 weeks)
+      // Get weekly transactions (last 4 weeks by actual dates)
       const [weeklyTransactions]: any = await connection.query(`
         SELECT 
-          WEEK(outTime, 1) as weekNum,
+          outTime,
           outNum,
-          WEEK(inTime, 1) as returnWeekNum,
+          inTime,
           inNum,
           status
         FROM sports 
@@ -234,15 +234,21 @@ export async function getStats() {
         aggregateDayData[day - 1].totalBorrowed += avgBorrowed;
       }
 
-      // Calculate weekly data (last 4 weeks)
-      const currentWeek = await connection.query(`SELECT WEEK(NOW(), 1) as currentWeek`);
-      const baseWeek = (currentWeek as any)[0][0].currentWeek;
+      // Calculate weekly data (last 4 weeks with actual date ranges)
+      const nowForWeek = new Date();
       
       for (let i = 0; i < 4; i++) {
-        const targetWeek = baseWeek - i;
-        const weekTransactions = weeklyTransactions.filter((txn: any) => 
-          txn.weekNum === targetWeek
-        );
+        // Calculate the start of each week going backwards
+        const weeksAgo = i;
+        const weekStart = new Date(nowForWeek);
+        weekStart.setDate(weekStart.getDate() - (weeksAgo * 7) - weekStart.getDay()); // Start of week (Sunday)
+        const weekEnd = new Date(weekStart);
+        weekEnd.setDate(weekEnd.getDate() + 6); // End of week (Saturday)
+        
+        const weekTransactions = weeklyTransactions.filter((txn: any) => {
+          const txnDate = new Date(txn.outTime);
+          return txnDate >= weekStart && txnDate <= weekEnd;
+        });
         
         let avgBorrowed = 0;
         if (weekTransactions.length > 0) {
@@ -252,14 +258,20 @@ export async function getStats() {
           avgBorrowed = Math.round(totalBorrowed / 7); // Daily average over the week
         }
         
+        // Store week metadata
         weekData[3 - i].count = avgBorrowed;
+        weekData[3 - i].week = 3 - i;
+        (weekData[3 - i] as any).weekStart = weekStart.toISOString().split('T')[0];
+        (weekData[3 - i] as any).weekEnd = weekEnd.toISOString().split('T')[0];
         aggregateWeekData[3 - i].totalBorrowed += avgBorrowed;
+        (aggregateWeekData[3 - i] as any).weekStart = weekStart.toISOString().split('T')[0];
+        (aggregateWeekData[3 - i] as any).weekEnd = weekEnd.toISOString().split('T')[0];
       }
 
       // Calculate monthly data (last 12 months)
-      const now = new Date();
-      const currentYear = now.getFullYear();
-      const currentMonth = now.getMonth() + 1; // 1-12
+      const nowForMonth = new Date();
+      const currentYear = nowForMonth.getFullYear();
+      const currentMonth = nowForMonth.getMonth() + 1; // 1-12
       
       for (let i = 0; i < 12; i++) {
         // Calculate target month and year going backwards from current
