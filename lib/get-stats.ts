@@ -52,15 +52,44 @@ export async function getStats() {
     console.log('✅ Late return rate:', lateReturnRate.toFixed(2), '%');
 
     const equipmentList = Object.keys(INVENTORY_LEVELS);
-    const peakBorrowingTimes: any = {};
+    const peakBorrowingTimes: any = {
+      hour: {},
+      day: {},
+      week: {},
+      month: {},
+    };
 
     // Calculate total inventory across all equipment
     const totalInventory = Object.values(INVENTORY_LEVELS).reduce((sum, val) => sum + val, 0);
     console.log('📦 Total inventory capacity:', totalInventory);
 
     // Calculate aggregate view (overall availability percentage across all equipment)
-    const aggregateData: any = Array.from({ length: 24 }, (_, hour) => ({
+    const aggregateHourData: any = Array.from({ length: 24 }, (_, hour) => ({
       hour,
+      count: 0,
+      totalBorrowed: 0,
+      totalCapacity: totalInventory,
+      availabilityPercent: 100,
+    }));
+
+    const aggregateDayData: any = Array.from({ length: 7 }, (_, day) => ({
+      day,
+      count: 0,
+      totalBorrowed: 0,
+      totalCapacity: totalInventory,
+      availabilityPercent: 100,
+    }));
+
+    const aggregateWeekData: any = Array.from({ length: 4 }, (_, week) => ({
+      week,
+      count: 0,
+      totalBorrowed: 0,
+      totalCapacity: totalInventory,
+      availabilityPercent: 100,
+    }));
+
+    const aggregateMonthData: any = Array.from({ length: 12 }, (_, month) => ({
+      month,
       count: 0,
       totalBorrowed: 0,
       totalCapacity: totalInventory,
@@ -75,8 +104,22 @@ export async function getStats() {
         count: 0,
       }));
 
-      // Get all transactions for this equipment from the last 2 days
-      // (handles timezone differences - server may be behind IST by a day)
+      const dayData = Array.from({ length: 7 }, (_, day) => ({
+        day,
+        count: 0,
+      }));
+
+      const weekData = Array.from({ length: 4 }, (_, week) => ({
+        week,
+        count: 0,
+      }));
+
+      const monthData = Array.from({ length: 12 }, (_, month) => ({
+        month,
+        count: 0,
+      }));
+
+      // Get hourly transactions (last 2 days)
       const [transactions]: any = await connection.query(`
         SELECT 
           HOUR(outTime) as outHour,
@@ -89,6 +132,48 @@ export async function getStats() {
         WHERE LOWER(equipment) = LOWER(?) 
           AND DATE(outTime) >= DATE_SUB(CURDATE(), INTERVAL 1 DAY)
         ORDER BY outTime, inTime
+      `, [equipment]);
+
+      // Get daily transactions (last 7 days)
+      const [dailyTransactions]: any = await connection.query(`
+        SELECT 
+          DAYOFWEEK(outTime) as dayOfWeek,
+          outNum,
+          DAYOFWEEK(inTime) as returnDayOfWeek,
+          inNum,
+          status
+        FROM sports 
+        WHERE LOWER(equipment) = LOWER(?) 
+          AND DATE(outTime) >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)
+        ORDER BY outTime
+      `, [equipment]);
+
+      // Get weekly transactions (last 4 weeks)
+      const [weeklyTransactions]: any = await connection.query(`
+        SELECT 
+          WEEK(outTime, 1) as weekNum,
+          outNum,
+          WEEK(inTime, 1) as returnWeekNum,
+          inNum,
+          status
+        FROM sports 
+        WHERE LOWER(equipment) = LOWER(?) 
+          AND DATE(outTime) >= DATE_SUB(CURDATE(), INTERVAL 28 DAY)
+        ORDER BY outTime
+      `, [equipment]);
+
+      // Get monthly transactions (last 12 months)
+      const [monthlyTransactions]: any = await connection.query(`
+        SELECT 
+          MONTH(outTime) as monthNum,
+          outNum,
+          MONTH(inTime) as returnMonthNum,
+          inNum,
+          status
+        FROM sports 
+        WHERE LOWER(equipment) = LOWER(?) 
+          AND DATE(outTime) >= DATE_SUB(CURDATE(), INTERVAL 365 DAY)
+        ORDER BY outTime
       `, [equipment]);
 
       // Also get currently pending items from before the 2-day window
@@ -127,26 +212,124 @@ export async function getStats() {
         fullDayData[hour].count = Math.max(0, netBorrowed);
         
         // Add to aggregate view (sum of all equipment borrowed at this hour)
-        aggregateData[hour].totalBorrowed += Math.max(0, netBorrowed);
+        aggregateHourData[hour].totalBorrowed += Math.max(0, netBorrowed);
       }
 
-      peakBorrowingTimes[equipment] = fullDayData;
+      // Calculate daily data (by day of week)
+      for (let day = 1; day <= 7; day++) {
+        let avgBorrowed = 0;
+        const dayTransactions = dailyTransactions.filter((txn: any) => 
+          txn.dayOfWeek === day
+        );
+        
+        if (dayTransactions.length > 0) {
+          const totalBorrowed = dayTransactions.reduce((sum: number, txn: any) => 
+            sum + (Number(txn.outNum) || 0), 0
+          );
+          avgBorrowed = Math.round(totalBorrowed / dayTransactions.length);
+        }
+        
+        dayData[day - 1].count = avgBorrowed;
+        aggregateDayData[day - 1].totalBorrowed += avgBorrowed;
+      }
+
+      // Calculate weekly data (last 4 weeks)
+      const currentWeek = await connection.query(`SELECT WEEK(NOW(), 1) as currentWeek`);
+      const baseWeek = (currentWeek as any)[0][0].currentWeek;
+      
+      for (let i = 0; i < 4; i++) {
+        const targetWeek = baseWeek - i;
+        const weekTransactions = weeklyTransactions.filter((txn: any) => 
+          txn.weekNum === targetWeek
+        );
+        
+        let avgBorrowed = 0;
+        if (weekTransactions.length > 0) {
+          const totalBorrowed = weekTransactions.reduce((sum: number, txn: any) => 
+            sum + (Number(txn.outNum) || 0), 0
+          );
+          avgBorrowed = Math.round(totalBorrowed / 7); // Daily average over the week
+        }
+        
+        weekData[3 - i].count = avgBorrowed;
+        aggregateWeekData[3 - i].totalBorrowed += avgBorrowed;
+      }
+
+      // Calculate monthly data (last 12 months)
+      const currentMonth = new Date().getMonth() + 1;
+      for (let i = 0; i < 12; i++) {
+        let targetMonth = currentMonth - i;
+        if (targetMonth <= 0) targetMonth += 12;
+        
+        const monthTransactions = monthlyTransactions.filter((txn: any) => 
+          txn.monthNum === targetMonth
+        );
+        
+        let avgBorrowed = 0;
+        if (monthTransactions.length > 0) {
+          const totalBorrowed = monthTransactions.reduce((sum: number, txn: any) => 
+            sum + (Number(txn.outNum) || 0), 0
+          );
+          const daysInMonth = new Date(new Date().getFullYear(), targetMonth, 0).getDate();
+          avgBorrowed = Math.round(totalBorrowed / daysInMonth); // Daily average
+        }
+        
+        monthData[11 - i].count = avgBorrowed;
+        aggregateMonthData[11 - i].totalBorrowed += avgBorrowed;
+      }
+
+      peakBorrowingTimes.hour[equipment] = fullDayData;
+      peakBorrowingTimes.day[equipment] = dayData;
+      peakBorrowingTimes.week[equipment] = weekData;
+      peakBorrowingTimes.month[equipment] = monthData;
     }
     
-    // Convert aggregate to percentage-based for availability ratio
-    aggregateData.forEach((hourData: any) => {
+    // Convert aggregate data to percentage-based for availability ratio
+    aggregateHourData.forEach((hourData: any) => {
       const borrowed = hourData.totalBorrowed;
       const available = totalInventory - borrowed;
       const availabilityPercent = (available / totalInventory) * 100;
       
-      // Store as "usage percent" for color coding (inverse of availability)
-      hourData.count = borrowed; // Keep borrowed count for display
+      hourData.count = borrowed;
       hourData.availabilityPercent = availabilityPercent;
-      hourData.totalInventory = totalInventory; // Add total inventory for calculation
+      hourData.totalInventory = totalInventory;
+    });
+
+    aggregateDayData.forEach((dayData: any) => {
+      const borrowed = dayData.totalBorrowed;
+      const available = totalInventory - borrowed;
+      const availabilityPercent = (available / totalInventory) * 100;
+      
+      dayData.count = borrowed;
+      dayData.availabilityPercent = availabilityPercent;
+      dayData.totalInventory = totalInventory;
+    });
+
+    aggregateWeekData.forEach((weekData: any) => {
+      const borrowed = weekData.totalBorrowed;
+      const available = totalInventory - borrowed;
+      const availabilityPercent = (available / totalInventory) * 100;
+      
+      weekData.count = borrowed;
+      weekData.availabilityPercent = availabilityPercent;
+      weekData.totalInventory = totalInventory;
+    });
+
+    aggregateMonthData.forEach((monthData: any) => {
+      const borrowed = monthData.totalBorrowed;
+      const available = totalInventory - borrowed;
+      const availabilityPercent = (available / totalInventory) * 100;
+      
+      monthData.count = borrowed;
+      monthData.availabilityPercent = availabilityPercent;
+      monthData.totalInventory = totalInventory;
     });
     
-    // Add aggregate view
-    peakBorrowingTimes['aggregate'] = aggregateData;
+    // Add aggregate views
+    peakBorrowingTimes.hour['aggregate'] = aggregateHourData;
+    peakBorrowingTimes.day['aggregate'] = aggregateDayData;
+    peakBorrowingTimes.week['aggregate'] = aggregateWeekData;
+    peakBorrowingTimes.month['aggregate'] = aggregateMonthData;
     console.log('✅ Peak borrowing times calculated');
 
     console.log('📊 Fetching most borrowed equipment...');

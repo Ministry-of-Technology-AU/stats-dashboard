@@ -4,12 +4,12 @@ import { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Clock, TrendingUp, AlertTriangle } from 'lucide-react';
-import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { useDashboard } from '@/components/DashboardWrapper';
 
 export default function SportsDashboard({ data: initialData }: { data: any }) {
   const [peakTimeView, setPeakTimeView] = useState('aggregate');
-  const [timeRangeView, setTimeRangeView] = useState('hour'); // hour, day, week, month
+  const [timeRangeView, setTimeRangeView] = useState<'hour' | 'day' | 'week' | 'month'>('hour');
   const [data, setData] = useState(initialData);
   const { setRefreshCallback, setIsRefreshing, setLastUpdate } = useDashboard();
 
@@ -79,32 +79,33 @@ export default function SportsDashboard({ data: initialData }: { data: any }) {
     'Frisbee': 4,
   };
 
-  const getColorForUsage = (count: number, equipment: string) => {
-    const inventoryLevel = INVENTORY_LEVELS[equipment] || 10;
-    const usagePercent = (count / inventoryLevel) * 100;
-    
-    if (usagePercent <= 25) return '#22c55e'; // green - healthy (0-25% used = 75%+ available)
-    if (usagePercent <= 70) return '#eab308'; // yellow - moderate (25-70% used = 30-75% available)
-    return '#ef4444'; // red - critical (70%+ used = 30% or less available)
-  };
-
-  const getColorForAvailability = (availabilityPercent: number) => {
-    if (availabilityPercent >= 75) return '#22c55e'; // green - healthy
-    if (availabilityPercent >= 30) return '#eab308'; // yellow - moderate
-    return '#ef4444'; // red - critical
-  };
-
-  const formatHourData = (hourlyData: any[], equipment: string) => {
+  const formatHourData = (hourlyData: any[], equipment: string, timeRange: 'hour' | 'day' | 'week' | 'month') => {
     if (!hourlyData || hourlyData.length === 0) return [];
     
     // Special handling for aggregate view
     if (equipment === 'aggregate') {
       return hourlyData.map((d: any) => {
-        const hour = Number(d.hour);
+        let timeLabel = '';
         const borrowed = Number(d.count) || 0;
         const availabilityPercent = Number(d.availabilityPercent) || 100;
         const totalInventory = Number(d.totalInventory) || 119;
         const available = totalInventory - borrowed;
+        
+        // Generate time label based on range
+        if (timeRange === 'hour') {
+          const hour = Number(d.hour);
+          timeLabel = `${hour === 0 ? 12 : hour > 12 ? hour - 12 : hour}${hour >= 12 ? 'PM' : 'AM'}`;
+        } else if (timeRange === 'day') {
+          const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+          timeLabel = dayNames[d.day - 1] || `Day ${d.day}`;
+        } else if (timeRange === 'week') {
+          timeLabel = `Week ${4 - d.week}`;
+        } else if (timeRange === 'month') {
+          const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+          const currentMonth = new Date().getMonth();
+          const monthIndex = (currentMonth - (11 - d.month) + 12) % 12;
+          timeLabel = monthNames[monthIndex];
+        }
         
         // Determine health status
         let status = 'Healthy';
@@ -118,24 +119,40 @@ export default function SportsDashboard({ data: initialData }: { data: any }) {
         }
         
         return {
-          time: `${hour === 0 ? 12 : hour > 12 ? hour - 12 : hour}${hour >= 12 ? 'PM' : 'AM'}`,
+          time: timeLabel,
           borrowed,
           available,
           availabilityPercent: availabilityPercent.toFixed(1),
           status,
           color: statusColor,
-          hour,
+          rawIndex: d.hour || d.day || d.week || d.month,
         };
       });
     }
     
     // Regular equipment view
     return hourlyData.map((d: any) => {
-      const hour = Number(d.hour);
+      let timeLabel = '';
       const borrowed = Number(d.count) || 0;
       const inventoryLevel = INVENTORY_LEVELS[equipment] || 10;
       const available = inventoryLevel - borrowed;
       const availabilityPercent = (available / inventoryLevel) * 100;
+      
+      // Generate time label based on range
+      if (timeRange === 'hour') {
+        const hour = Number(d.hour);
+        timeLabel = `${hour === 0 ? 12 : hour > 12 ? hour - 12 : hour}${hour >= 12 ? 'PM' : 'AM'}`;
+      } else if (timeRange === 'day') {
+        const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+        timeLabel = dayNames[d.day - 1] || `Day ${d.day}`;
+      } else if (timeRange === 'week') {
+        timeLabel = `Week ${4 - d.week}`;
+      } else if (timeRange === 'month') {
+        const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        const currentMonth = new Date().getMonth();
+        const monthIndex = (currentMonth - (11 - d.month) + 12) % 12;
+        timeLabel = monthNames[monthIndex];
+      }
       
       // Determine health status
       let status = 'Healthy';
@@ -149,13 +166,13 @@ export default function SportsDashboard({ data: initialData }: { data: any }) {
       }
       
       return {
-        time: `${hour === 0 ? 12 : hour > 12 ? hour - 12 : hour}${hour >= 12 ? 'PM' : 'AM'}`,
+        time: timeLabel,
         borrowed,
         available,
         availabilityPercent: availabilityPercent.toFixed(1),
         status,
         color: statusColor,
-        hour,
+        rawIndex: d.hour || d.day || d.week || d.month,
       };
     });
   };
@@ -182,7 +199,11 @@ export default function SportsDashboard({ data: initialData }: { data: any }) {
   ];
 
   allEquipment.forEach((eq) => {
-    peakTimesData[eq] = formatHourData(data.peakBorrowingTimes?.[eq] || [], eq);
+    peakTimesData[eq] = formatHourData(
+      data.peakBorrowingTimes?.[timeRangeView]?.[eq] || [], 
+      eq, 
+      timeRangeView
+    );
   });
 
   // Custom tooltip to show inventory status
@@ -281,7 +302,7 @@ export default function SportsDashboard({ data: initialData }: { data: any }) {
                 <CardTitle>Peak Borrowing Times</CardTitle>
                 <CardDescription>Monitor equipment usage patterns and availability</CardDescription>
               </div>
-              <Tabs value={timeRangeView} onValueChange={setTimeRangeView} className="w-auto">
+              <Tabs value={timeRangeView} onValueChange={(v) => setTimeRangeView(v as any)} className="w-auto">
                 <TabsList>
                   <TabsTrigger value="hour">Hour</TabsTrigger>
                   <TabsTrigger value="day">Day</TabsTrigger>
@@ -329,9 +350,18 @@ export default function SportsDashboard({ data: initialData }: { data: any }) {
                   <ResponsiveContainer width="100%" height={320}>
                     <LineChart data={peakTimesData[peakTimeView]} margin={{ top: 5, right: 10, bottom: 5, left: 0 }}>
                       <defs>
-                        <linearGradient id="borrowedGradient" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.8}/>
-                          <stop offset="95%" stopColor="#3b82f6" stopOpacity={0.1}/>
+                        {/* Create gradients for each health status */}
+                        <linearGradient id="healthyGradient" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#22c55e" stopOpacity={0.6}/>
+                          <stop offset="95%" stopColor="#22c55e" stopOpacity={0.05}/>
+                        </linearGradient>
+                        <linearGradient id="moderateGradient" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#eab308" stopOpacity={0.6}/>
+                          <stop offset="95%" stopColor="#eab308" stopOpacity={0.05}/>
+                        </linearGradient>
+                        <linearGradient id="criticalGradient" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#ef4444" stopOpacity={0.6}/>
+                          <stop offset="95%" stopColor="#ef4444" stopOpacity={0.05}/>
                         </linearGradient>
                       </defs>
                       <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" className="dark:stroke-gray-700" />
@@ -351,27 +381,47 @@ export default function SportsDashboard({ data: initialData }: { data: any }) {
                         }}
                       />
                       <Tooltip content={<CustomTooltip />} />
+                      {/* Draw a line segment for each status change */}
+                      {peakTimesData[peakTimeView].map((dataPoint: any, index: number) => {
+                        if (index === peakTimesData[peakTimeView].length - 1) return null;
+                        
+                        const nextPoint = peakTimesData[peakTimeView][index + 1];
+                        const segmentData = [dataPoint, nextPoint];
+                        
+                        return (
+                          <Line
+                            key={`segment-${index}`}
+                            data={segmentData}
+                            type="monotone"
+                            dataKey="borrowed"
+                            stroke={dataPoint.color}
+                            strokeWidth={3}
+                            dot={false}
+                            activeDot={false}
+                            isAnimationActive={false}
+                          />
+                        );
+                      })}
+                      {/* Add dots on top */}
                       <Line
                         type="monotone"
                         dataKey="borrowed"
-                        stroke="#3b82f6"
-                        strokeWidth={2.5}
-                        fill="url(#borrowedGradient)"
-                        fillOpacity={1}
+                        stroke="transparent"
+                        strokeWidth={0}
                         dot={(props: any) => {
                           const { cx, cy, payload } = props;
                           return (
                             <circle
                               cx={cx}
                               cy={cy}
-                              r={4}
+                              r={5}
                               fill={payload.color}
                               stroke="#fff"
                               strokeWidth={2}
                             />
                           );
                         }}
-                        activeDot={{ r: 6, strokeWidth: 2 }}
+                        activeDot={{ r: 7, strokeWidth: 2 }}
                       />
                     </LineChart>
                   </ResponsiveContainer>
